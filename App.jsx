@@ -22,8 +22,31 @@ import {
   MessageSquare,
   Activity,
   Phone,
+  Loader2,
   Image as ImageIcon
 } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, arrayUnion } from 'firebase/firestore';
+
+// --- FIREBASE SETUP ---
+// IMPORTANT: Paste your actual Firebase config keys inside this object
+// when running this app on your local computer or Vercel!
+const localFirebaseConfig = {
+  apiKey: "AIzaSyDWr2-WWHUEKp5rVRHisgBulm3GmKJAUlU",
+  authDomain: "hotel-feedback-app-abbaa.firebaseapp.com",
+  projectId: "hotel-feedback-app-abbaa",
+  storageBucket: "hotel-feedback-app-abbaa.firebasestorage.app",
+  messagingSenderId: "947480682084",
+  appId: "1:947480682084:web:648898e9970b6f3a630971",
+  measurementId: "G-MDF60ENP25"
+};
+
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : localFirebaseConfig;
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 const DEPARTMENTS = [
   'Front Desk',
@@ -75,88 +98,117 @@ const analyzeSentiment = (text) => {
   return { label: 'Neutral', emoji: '😐', color: 'text-gray-700 bg-gray-100' };
 };
 
-// Helper function to load initial data from local storage
-const loadInitialData = () => {
-  const saved = localStorage.getItem('hotel_feedback_entries');
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {
-      console.error("Failed to parse local storage data.");
-    }
-  }
-  return [];
-};
-
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [entries, setEntries] = useState(loadInitialData());
+  const [entries, setEntries] = useState([]);
   const [currency, setCurrency] = useState('$');
   const [toast, setToast] = useState(null);
   const [historyFilter, setHistoryFilter] = useState('all');
-
-  const [currentUserName, setCurrentUserName] = useState('Demo User');
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const showToast = (message) => {
     setToast(message);
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Sync to local storage whenever entries change
+  // Firebase Authentication setup
   useEffect(() => {
-    localStorage.setItem('hotel_feedback_entries', JSON.stringify(entries));
-  }, [entries]);
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error('Authentication Error:', error);
+      }
+    };
+    initAuth();
 
-  const addEntry = (newEntry) => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch Live Data from Firebase
+  useEffect(() => {
+    if (!user) return; 
+
+    // Guarding paths according to rules
+    const entriesRef = collection(db, 'artifacts', appId, 'public', 'data', 'feedback_entries');
+    
+    const unsubscribe = onSnapshot(entriesRef, 
+      (snapshot) => {
+        const loadedEntries = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Sorting happens locally
+        loadedEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
+        setEntries(loadedEntries);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching data:', error);
+        setLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [user]);
+
+  const addEntry = async (newEntry) => {
+    if (!user) return;
     try {
-      const entryWithId = {
-        ...newEntry,
-        id: Date.now().toString()
-      };
-      
-      setEntries(prev => {
-        const updated = [entryWithId, ...prev];
-        updated.sort((a, b) => new Date(b.date) - new Date(a.date));
-        return updated;
-      });
-      
-      setActiveTab(role === 'Manager' ? 'dashboard' : 'history'); 
-      showToast('Entry saved locally!');
+      const entriesRef = collection(db, 'artifacts', appId, 'public', 'data', 'feedback_entries');
+      await addDoc(entriesRef, newEntry);
+      setActiveTab('history'); 
+      showToast('Entry saved securely to cloud!');
     } catch (error) {
       console.error('Error adding entry:', error);
       showToast('Error saving entry.');
     }
   };
 
-  const resolveEntry = (id) => {
+  const resolveEntry = async (id) => {
+    if (!user) return;
     try {
-      setEntries(prev => prev.map(entry => 
-        entry.id === id ? { ...entry, status: 'resolved', resolvedAt: new Date().toISOString() } : entry
-      ));
+      const entryRef = doc(db, 'artifacts', appId, 'public', 'data', 'feedback_entries', id);
+      await updateDoc(entryRef, { status: 'resolved', resolvedAt: new Date().toISOString() });
       showToast('Ticket marked as resolved.');
     } catch (error) {
       console.error('Error resolving entry:', error);
     }
   };
 
-  const addComment = (id, commentText, authorName) => {
+  const addComment = async (id, commentText, authorName) => {
+    if (!user) return;
     try {
-      setEntries(prev => prev.map(entry => {
-        if (entry.id === id) {
-          const newComments = [...(entry.comments || []), {
-            text: commentText,
-            author: authorName || 'Staff Member',
-            time: new Date().toISOString()
-          }];
-          return { ...entry, comments: newComments };
-        }
-        return entry;
-      }));
+      const entryRef = doc(db, 'artifacts', appId, 'public', 'data', 'feedback_entries', id);
+      await updateDoc(entryRef, {
+        comments: arrayUnion({
+          text: commentText,
+          author: authorName || 'Staff Member',
+          time: new Date().toISOString()
+        })
+      });
       showToast('Comment added.');
     } catch (error) {
       console.error('Error adding comment:', error);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center font-sans max-w-md mx-auto shadow-2xl">
+        <Loader2 className="animate-spin text-indigo-600 mb-4" size={48} />
+        <p className="text-gray-500 font-medium animate-pulse">Syncing with secure cloud...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 font-sans max-w-md mx-auto shadow-2xl relative overflow-hidden">
