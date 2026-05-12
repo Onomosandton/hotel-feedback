@@ -106,13 +106,14 @@ export default function App() {
   const [historyFilter, setHistoryFilter] = useState('all');
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [cloudError, setCloudError] = useState(null);
 
   const showToast = (message) => {
     setToast(message);
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Firebase Authentication setup
+  // Firebase Authentication setup with robust error handling
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -123,12 +124,18 @@ export default function App() {
         }
       } catch (error) {
         console.error('Authentication Error:', error);
+        setCloudError('Authentication failed. Please ensure "Anonymous" sign-in is enabled in your Firebase Console.');
+        setLoading(false);
       }
     };
     initAuth();
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (!currentUser) {
+        // If auth resolved but no user, we clear loading so it doesn't spin forever
+        setLoading(false);
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -151,9 +158,11 @@ export default function App() {
         loadedEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
         setEntries(loadedEntries);
         setLoading(false);
+        setCloudError(null);
       },
       (error) => {
         console.error('Error fetching data:', error);
+        setCloudError('Database access denied. Check if Firestore rules are in "Test Mode".');
         setLoading(false);
       }
     );
@@ -161,7 +170,10 @@ export default function App() {
   }, [user]);
 
   const addEntry = async (newEntry) => {
-    if (!user) return;
+    if (!user) {
+      showToast('Error: Not securely connected to the cloud.');
+      return;
+    }
     try {
       const entriesRef = collection(db, 'artifacts', appId, 'public', 'data', 'feedback_entries');
       await addDoc(entriesRef, newEntry);
@@ -169,7 +181,7 @@ export default function App() {
       showToast('Entry saved securely to cloud!');
     } catch (error) {
       console.error('Error adding entry:', error);
-      showToast('Error saving entry.');
+      showToast('Error saving entry to cloud.');
     }
   };
 
@@ -203,7 +215,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center font-sans max-w-md mx-auto shadow-2xl">
+      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center font-sans max-w-md mx-auto shadow-2xl px-6 text-center">
         <Loader2 className="animate-spin text-indigo-600 mb-4" size={48} />
         <p className="text-gray-500 font-medium animate-pulse">Syncing with secure cloud...</p>
       </div>
@@ -238,9 +250,16 @@ export default function App() {
           </div>
         </div>
       </header>
+      
+      {/* Cloud Error Banner */}
+      {cloudError && (
+        <div className="bg-red-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-center text-center z-20 shadow-md">
+          <AlertCircle size={14} className="mr-2 shrink-0" /> {cloudError}
+        </div>
+      )}
 
       {/* Main Scrollable Content */}
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 overflow-y-auto pb-20 relative">
         {activeTab === 'dashboard' && (
           <Dashboard 
             entries={entries} 
@@ -265,7 +284,7 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around p-2 z-10 pb-safe">
+      <nav className="bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around p-2 z-10 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <button 
           onClick={() => setActiveTab('dashboard')}
           className={`flex flex-col items-center p-2 rounded-lg w-1/3 transition-colors ${activeTab === 'dashboard' ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:text-indigo-500'}`}
