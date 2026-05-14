@@ -391,5 +391,3 @@ function History({ entries, onResolve, onAddComment, currency, filter, setFilter
     </div>
   );
 }
-  return <Clock {...props} />;
-}
