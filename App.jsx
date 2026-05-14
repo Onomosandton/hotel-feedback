@@ -23,18 +23,13 @@ import {
   Activity,
   Phone,
   Loader2,
-  RefreshCw,
-  Database,
-  Wifi,
-  WifiOff,
-  ShieldCheck,
   Image as ImageIcon
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, arrayUnion } from 'firebase/firestore';
 
-// --- FIREBASE CONFIGURATION ---
+// --- FIREBASE SETUP ---
 const localFirebaseConfig = {
   apiKey: "AIzaSyDWr2-WWHUEKp5rVRHisgBulm3GmKJAUlU",
   authDomain: "hotel-feedback-app-abbaa.firebaseapp.com",
@@ -49,19 +44,48 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Consistent ID ensures all devices (laptop/mobile) see the same data
 const SHARED_APP_ID = "hotel_feedback_main_sync";
 
 const DEPARTMENTS = [
-  'Front Desk', 'Housekeeping', 'Food & Beverage', 'Maintenance', 'Concierge', 'Spa & Wellness', 'Valet/Parking'
+  'Front Desk',
+  'Housekeeping',
+  'Food & Beverage',
+  'Maintenance',
+  'Concierge',
+  'Spa & Wellness',
+  'Valet/Parking'
 ];
 
+const SUGGESTED_RESOLUTIONS = {
+  'Front Desk': 'Listen actively, apologize, and offer a complimentary room upgrade or late checkout.',
+  'Housekeeping': 'Dispatch housekeeping immediately, apologize, and offer a complimentary amenity (e.g. fruit basket).',
+  'Food & Beverage': 'Replace the item immediately, and consider comping the meal or offering a free dessert.',
+  'Maintenance': 'Send maintenance within 15 mins. Offer a room move if the issue cannot be resolved quickly.',
+  'Concierge': 'Apologize for the inconvenience, provide an alternative recommendation, and offer a small courtesy gift.',
+  'Spa & Wellness': 'Reschedule the service if needed, apologize, and offer a discount on their next treatment.',
+  'Valet/Parking': 'Retrieve the vehicle promptly, apologize, and waive the parking fee for the day.'
+};
+
+const SUGGESTED_COMPLIMENT_ACTIONS = {
+  'Front Desk': 'Thank the guest, share the feedback with the team at the next briefing, and note it on the guest profile.',
+  'Housekeeping': 'Pass the praise to the specific housekeeper, recognize them on the staff board, and thank the guest.',
+  'Food & Beverage': 'Share the compliment with the chef and servers, and invite the guest back for another meal.',
+  'Maintenance': 'Commend the technician for their promptness/quality and record it in their performance file.',
+  'Concierge': 'Recognize the concierge for their excellent recommendations and share the success story with the team.',
+  'Spa & Wellness': 'Praise the therapist, encourage the guest to leave a public review, and note their preferences.',
+  'Valet/Parking': 'Thank the valet team for their efficiency and pass the guest\'s appreciation to the specific driver.'
+};
+
+// --- AI Sentiment Simulator ---
 const analyzeSentiment = (text) => {
   const lower = (text || "").toLowerCase();
-  if (/(furious|unacceptable|terrible|worst|disgusting|outrageous|angry)/.test(lower)) return { label: 'Furious', emoji: '😡', color: 'text-red-700 bg-red-100 border-red-200' };
-  if (/(slow|dirty|broken|rude|bad|poor|annoyed|wait)/.test(lower)) return { label: 'Irritated', emoji: '😠', color: 'text-orange-700 bg-orange-100 border-orange-200' };
-  if (/(great|excellent|amazing|love|perfect|wonderful|best)/.test(lower)) return { label: 'Delighted', emoji: '🤩', color: 'text-green-700 bg-green-100 border-green-200' };
-  if (/(good|nice|friendly|clean|helpful|happy)/.test(lower)) return { label: 'Happy', emoji: '😊', color: 'text-teal-700 bg-teal-100 border-teal-200' };
-  return { label: 'Neutral', emoji: '😐', color: 'text-gray-700 bg-gray-100 border-gray-200' };
+  if (/(furious|unacceptable|terrible|worst|disgusting|outrageous|angry)/.test(lower)) return { label: 'Furious', emoji: '😡', color: 'text-red-700 bg-red-100' };
+  if (/(slow|dirty|broken|rude|bad|poor|annoyed|wait)/.test(lower)) return { label: 'Irritated', emoji: '😠', color: 'text-orange-700 bg-orange-100' };
+  if (/(great|excellent|amazing|love|perfect|wonderful|best)/.test(lower)) return { label: 'Delighted', emoji: '🤩', color: 'text-green-700 bg-green-100' };
+  if (/(good|nice|friendly|clean|helpful|happy)/.test(lower)) return { label: 'Happy', emoji: '😊', color: 'text-teal-700 bg-teal-100' };
+  return { label: 'Neutral', emoji: '😐', color: 'text-gray-700 bg-gray-100' };
 };
 
 export default function App() {
@@ -72,27 +96,26 @@ export default function App() {
   const [historyFilter, setHistoryFilter] = useState('all');
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [cloudError, setCloudError] = useState(null);
-  const [lastSync, setLastSync] = useState(null);
 
   const showToast = (message) => {
     setToast(message);
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Firebase Authentication setup (using the working anonymous login)
   useEffect(() => {
     const initAuth = async () => {
       try {
         await signInAnonymously(auth);
       } catch (error) {
         console.error('Auth Error:', error);
-        setCloudError(`Auth Failed: ${error.message}`);
       }
     };
     initAuth();
     return onAuthStateChanged(auth, setUser);
   }, []);
 
+  // Fetch Live Data from Firebase (using the working strict path)
   useEffect(() => {
     if (!user) return; 
 
@@ -100,32 +123,33 @@ export default function App() {
     
     const unsubscribe = onSnapshot(entriesRef, 
       (snapshot) => {
-        const loadedEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const loadedEntries = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
         loadedEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
         setEntries(loadedEntries);
-        setLastSync(new Date().toLocaleTimeString());
         setLoading(false);
-        setCloudError(null);
       },
       (error) => {
-        console.error('Firestore Error:', error);
-        setCloudError(`Database Error: ${error.message}. Please click "Publish" in your Firebase Rules tab.`);
+        console.error('Error fetching data:', error);
         setLoading(false);
       }
     );
-
     return () => unsubscribe();
   }, [user]);
 
   const addEntry = async (newEntry) => {
-    if (!user) return showToast('Error: Connection pending...');
+    if (!user) return;
     try {
       const entriesRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries');
       await addDoc(entriesRef, { ...newEntry, userId: user.uid });
       setActiveTab('history'); 
-      showToast('Synced to all devices!');
+      showToast('Entry saved securely to cloud!');
     } catch (error) {
-      showToast(`Save failed: ${error.message}`);
+      console.error('Error adding entry:', error);
+      showToast('Error saving entry.');
     }
   };
 
@@ -134,8 +158,10 @@ export default function App() {
     try {
       const entryRef = doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries', id);
       await updateDoc(entryRef, { status: 'resolved', resolvedAt: new Date().toISOString() });
-      showToast('Status updated!');
-    } catch (error) { console.error(error); }
+      showToast('Ticket marked as resolved.');
+    } catch (error) {
+      console.error('Error resolving entry:', error);
+    }
   };
 
   const addComment = async (id, commentText, authorName) => {
@@ -143,21 +169,23 @@ export default function App() {
     try {
       const entryRef = doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries', id);
       await updateDoc(entryRef, {
-        comments: arrayUnion({ 
-          text: commentText, 
-          author: authorName || 'Staff', 
-          time: new Date().toISOString() 
+        comments: arrayUnion({
+          text: commentText,
+          author: authorName || 'Staff Member',
+          time: new Date().toISOString()
         })
       });
-    } catch (error) { console.error(error); }
+      showToast('Comment added.');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
   };
 
-  if (loading && !cloudError) {
+  if (loading) {
     return (
-      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center max-w-md mx-auto p-10 text-center">
-        <Loader2 className="animate-spin text-indigo-600 mb-6" size={60} />
-        <h2 className="text-2xl font-black text-gray-800 tracking-tighter uppercase">Authenticating</h2>
-        <p className="text-gray-400 mt-2 italic text-sm">Securing database connection...</p>
+      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center font-sans max-w-md mx-auto shadow-2xl">
+        <Loader2 className="animate-spin text-indigo-600 mb-4" size={48} />
+        <p className="text-gray-500 font-medium animate-pulse">Syncing with secure cloud...</p>
       </div>
     );
   }
@@ -165,229 +193,782 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-gray-50 font-sans max-w-md mx-auto shadow-2xl relative overflow-hidden">
       {toast && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 w-[90%] bg-gray-800 text-white px-4 py-3 rounded-xl shadow-2xl z-50 text-sm text-center font-bold flex items-center justify-center animate-in fade-in slide-in-from-top-4">
-          <CheckCircle size={18} className="text-green-400 mr-2" /> {toast}
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 w-[90%] bg-gray-800 text-white px-4 py-3 rounded-xl shadow-2xl z-50 text-sm text-center font-medium animate-in fade-in slide-in-from-top-4 flex items-center justify-center space-x-2">
+          <CheckCircle size={18} className="text-green-400 shrink-0" />
+          <span>{toast}</span>
         </div>
       )}
 
+      {/* Header */}
       <header className="bg-indigo-900 text-white p-4 shadow-md z-10">
         <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-black uppercase tracking-tighter">Feedback Tracker</h1>
-            <div className="flex items-center text-[9px] text-indigo-300 font-bold tracking-widest mt-1">
-              <RefreshCw size={8} className="mr-1 animate-spin" /> {user ? "SYNC CONNECTED" : "OFFLINE"}
-            </div>
+          <h1 className="text-xl font-bold tracking-wide">Feedback Tracker</h1>
+          <div className="flex items-center space-x-2">
+            <select 
+              value={currency} 
+              onChange={(e) => setCurrency(e.target.value)}
+              className="bg-indigo-800 text-white border border-indigo-700 rounded p-1 text-xs outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+            >
+              <option value="$">USD ($)</option>
+              <option value="€">EUR (€)</option>
+              <option value="£">GBP (£)</option>
+              <option value="R">ZAR (R)</option>
+              <option value="A$">AUD (A$)</option>
+            </select>
           </div>
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="bg-indigo-800 text-white border border-indigo-700 rounded p-1 text-xs font-bold outline-none">
-            <option value="$">USD ($)</option>
-            <option value="€">EUR (€)</option>
-            <option value="£">GBP (£)</option>
-            <option value="R">ZAR (R)</option>
-          </select>
         </div>
       </header>
-      
-      {cloudError && (
-        <div className="bg-red-600 text-white px-4 py-4 text-[10px] font-black uppercase tracking-widest text-center z-20 flex flex-col items-center justify-center leading-tight shadow-xl">
-          <div className="flex items-center mb-1 text-sm text-white">
-            <AlertCircle size={18} className="mr-2 shrink-0 animate-pulse" /> ACCESS DENIED
-          </div>
-          <p className="opacity-90 font-bold mb-2">{cloudError}</p>
-          <button onClick={() => window.location.reload()} className="bg-white text-red-600 px-4 py-1 rounded-full font-black text-[9px]">Retry Sync</button>
-        </div>
-      )}
 
-      <main className="flex-1 overflow-y-auto pb-32 relative">
-        {activeTab === 'dashboard' && <Dashboard entries={entries} currency={currency} onOpenTicketsClick={() => { setHistoryFilter('open'); setActiveTab('history'); }} />}
+      {/* Main Scrollable Content */}
+      <main className="flex-1 overflow-y-auto pb-20">
+        {activeTab === 'dashboard' && (
+          <Dashboard 
+            entries={entries} 
+            currency={currency} 
+            onOpenTicketsClick={() => {
+              setHistoryFilter('open');
+              setActiveTab('history');
+            }} 
+          />
+        )}
         {activeTab === 'add' && <AddEntryForm onSave={addEntry} currency={currency} />}
-        {activeTab === 'history' && <History entries={entries} onResolve={resolveEntry} onAddComment={addComment} currency={currency} filter={historyFilter} setFilter={setHistoryFilter} />}
+        {activeTab === 'history' && (
+          <History 
+            entries={entries} 
+            onResolve={resolveEntry} 
+            onAddComment={addComment}
+            currency={currency} 
+            filter={historyFilter} 
+            setFilter={setHistoryFilter}
+          />
+        )}
       </main>
 
-      <nav className="bg-white border-t border-gray-100 absolute bottom-0 w-full flex justify-around p-2 z-10 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-        {['dashboard', 'add', 'history'].map((tab) => (
-          <button key={tab} onClick={() => { setActiveTab(tab); if(tab==='history') setHistoryFilter('all'); }} className={`flex flex-col items-center p-2 rounded-xl w-1/3 transition-all ${activeTab === tab ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400'}`}>
-            {tab === 'dashboard' ? <Home size={24} /> : tab === 'add' ? <PlusCircle size={24} /> : <List size={24} />}
-            <span className="text-[10px] font-black uppercase tracking-tighter mt-1">{tab}</span>
-          </button>
-        ))}
+      {/* Bottom Navigation */}
+      <nav className="bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around p-2 z-10 pb-safe">
+        <button 
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex flex-col items-center p-2 rounded-lg w-1/3 transition-colors ${activeTab === 'dashboard' ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:text-indigo-500'}`}
+        >
+          <Home size={24} />
+          <span className="text-xs mt-1 font-medium">Dashboard</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('add')}
+          className={`flex flex-col items-center p-2 rounded-lg w-1/3 transition-colors ${activeTab === 'add' ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:text-indigo-500'}`}
+        >
+          <PlusCircle size={24} />
+          <span className="text-xs mt-1 font-medium">New Entry</span>
+        </button>
+        <button 
+          onClick={() => {
+            setActiveTab('history');
+            setHistoryFilter('all');
+          }}
+          className={`flex flex-col items-center p-2 rounded-lg w-1/3 transition-colors ${activeTab === 'history' ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:text-indigo-500'}`}
+        >
+          <List size={24} />
+          <span className="text-xs mt-1 font-medium">History</span>
+        </button>
       </nav>
-      
-      <div className="absolute bottom-[72px] left-0 w-full bg-slate-900 text-white/60 px-3 py-2 text-[8px] font-mono flex flex-col space-y-1 z-10 border-t border-white/10 shadow-2xl">
-        <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-1.5">
-                <ShieldCheck size={10} className={user ? "text-green-400" : "text-amber-400"} />
-                <span className="uppercase font-black tracking-widest text-white/90">Shared Database</span>
-            </div>
-            <span className={user ? "text-green-400" : "text-red-400"}>{user ? "ONLINE" : "ERROR"}</span>
-        </div>
-        <div className="flex justify-between items-center opacity-80 border-t border-white/5 pt-1 mt-1">
-            <span>UID: <span className="text-blue-300">{user?.uid || "PENDING"}</span></span>
-            <span>SYNC: <span className="text-white">{lastSync || "N/A"}</span></span>
-        </div>
-      </div>
     </div>
   );
 }
 
-// --- COMPONENTS ---
-
+// --- DASHBOARD COMPONENT ---
 function Dashboard({ entries, currency, onOpenTicketsClick }) {
-  const [range, setRange] = useState('30');
-  const filtered = useMemo(() => {
-    if (range === 'all') return entries;
+  const [dateRange, setDateRange] = useState('30'); 
+
+  // Filter entries based on selected date range
+  const filteredEntries = useMemo(() => {
+    if (dateRange === 'all') return entries;
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - parseInt(range));
+    cutoff.setDate(cutoff.getDate() - parseInt(dateRange));
     return entries.filter(e => new Date(e.date) >= cutoff);
-  }, [entries, range]);
+  }, [entries, dateRange]);
 
   const stats = useMemo(() => {
-    let comps = 0, complaints = 0, cost = 0, open = 0;
-    const depts = {}, staff = {};
-    filtered.forEach(e => {
-      if (e.type === 'compliment') {
-        comps++;
-        if (e.staffMentioned) staff[e.staffMentioned] = (staff[e.staffMentioned] || 0) + 1;
-      } else {
-        complaints++;
-        cost += Number(e.cost) || 0;
-        if (e.status === 'open') open++;
+    let compliments = 0;
+    let complaints = 0;
+    let totalCost = 0;
+    let openTicketsCount = 0;
+    const deptCount = {};
+    const staffComplimentCount = {};
+
+    filteredEntries.forEach(entry => {
+      if (entry.type === 'compliment') {
+        compliments++;
+        if (entry.staffMentioned) {
+          staffComplimentCount[entry.staffMentioned] = (staffComplimentCount[entry.staffMentioned] || 0) + 1;
+        }
       }
-      depts[e.department] = (depts[e.department] || 0) + 1;
+      if (entry.type === 'complaint') {
+        complaints++;
+        totalCost += Number(entry.cost) || 0;
+      }
+      if (entry.status === 'open') openTicketsCount++;
+      deptCount[entry.department] = (deptCount[entry.department] || 0) + 1;
     });
-    return { 
-      comps, complaints, cost, open,
-      topDept: Object.keys(depts).length > 0 ? Object.keys(depts).reduce((a, b) => depts[a] > depts[b] ? a : b) : 'N/A',
-      topStaff: Object.keys(staff).length > 0 ? Object.keys(staff).reduce((a, b) => staff[a] > staff[b] ? a : b) : 'N/A'
-    };
-  }, [filtered]);
+
+    const topDept = Object.keys(deptCount).length > 0 ? Object.keys(deptCount).reduce((a, b) => deptCount[a] > deptCount[b] ? a : b) : 'N/A';
+    const topStaff = Object.keys(staffComplimentCount).length > 0 ? Object.keys(staffComplimentCount).reduce((a, b) => staffComplimentCount[a] > staffComplimentCount[b] ? a : b) : 'N/A';
+    return { compliments, complaints, totalCost, topDept, topStaff, openTicketsCount };
+  }, [filteredEntries]);
+
+  // Department Quickview Breakdown
+  const deptBreakdown = useMemo(() => {
+    const breakdown = {};
+    DEPARTMENTS.forEach(d => breakdown[d] = { complaints: 0, compliments: 0 });
+    
+    filteredEntries.forEach(e => {
+      if (breakdown[e.department]) {
+        if (e.type === 'complaint') breakdown[e.department].complaints++;
+        if (e.type === 'compliment') breakdown[e.department].compliments++;
+      }
+    });
+    
+    return Object.entries(breakdown)
+      .map(([dept, counts]) => ({ dept, ...counts }))
+      .sort((a, b) => (b.complaints + b.compliments) - (a.complaints + a.compliments));
+  }, [filteredEntries]);
+
+  // CSV Export Functionality
+  const exportCSV = () => {
+    const headers = ['Type', 'Date', 'Guest Name', 'Guest Email', 'Guest Phone', 'Department', 'Reason', 'Action', 'Cost', 'Status', 'Handled By', 'Sentiment'];
+    const rows = filteredEntries.map(e => {
+      const sentimentStr = e.sentiment ? e.sentiment.label : 'N/A';
+      return `"${e.type}","${new Date(e.date).toLocaleDateString()}","${e.guestName}","${e.guestEmail || ''}","${e.guestPhone || ''}","${e.department}","${e.reason || ''}","${e.actionTaken}","${e.cost || 0}","${e.status || 'N/A'}","${e.handledBy || ''}","${sentimentStr}"`;
+    });
+    
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `hotel_feedback_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Trend Chart Data (Last 7 Days)
+  const trendData = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push({
+        date: d.toDateString(),
+        label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        complaints: 0,
+        compliments: 0
+      });
+    }
+
+    entries.forEach(e => {
+      const eDate = new Date(e.date).toDateString();
+      const dayMatch = days.find(d => d.date === eDate);
+      if (dayMatch) {
+        if (e.type === 'complaint') dayMatch.complaints++;
+        if (e.type === 'compliment') dayMatch.compliments++;
+      }
+    });
+
+    const maxVal = Math.max(...days.map(d => Math.max(d.complaints, d.compliments, 1)));
+    return { days, maxVal };
+  }, [entries]);
 
   return (
-    <div className="p-4 space-y-4 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-white border border-gray-200 text-xs font-black uppercase p-2 rounded-lg shadow-sm outline-none">
+    <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex justify-between items-center mb-2">
+        <select 
+          value={dateRange}
+          onChange={(e) => setDateRange(e.target.value)}
+          className="bg-white border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 font-medium shadow-sm"
+        >
           <option value="1">Today</option>
           <option value="7">Last 7 Days</option>
           <option value="30">Last 30 Days</option>
           <option value="all">All Time</option>
         </select>
-        <div className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Analytics</div>
+        
+        <button 
+          onClick={exportCSV}
+          className="flex items-center text-xs bg-green-600 text-white px-3 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors shadow-sm"
+        >
+          <Download size={14} className="mr-1.5" />
+          Export CSV
+        </button>
       </div>
       
+      {/* Metrics */}
       <div className="grid grid-cols-2 gap-4">
-        <StatBox label="Compliments" value={stats.comps} color="text-green-600 bg-green-50 border-green-100" />
-        <StatBox label="Complaints" value={stats.complaints} color="text-red-600 bg-red-50 border-red-100" />
+        <div className="bg-green-50 rounded-2xl p-4 shadow-sm border border-green-100 flex flex-col items-center justify-center">
+          <span className="text-3xl font-bold text-green-700">{stats.compliments}</span>
+          <span className="text-sm font-medium text-green-600 text-center">Compliments</span>
+        </div>
+        <div className="bg-red-50 rounded-2xl p-4 shadow-sm border border-red-100 flex flex-col items-center justify-center">
+          <span className="text-3xl font-bold text-red-700">{stats.complaints}</span>
+          <span className="text-sm font-medium text-red-600 text-center">Complaints</span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <MetricCard label="Open Issues" value={stats.open} color="text-amber-600 bg-amber-50" onClick={onOpenTicketsClick} />
-        <MetricCard label="Total Cost" value={`${currency}${stats.cost.toFixed(2)}`} color="text-gray-800 bg-white" />
-        <MetricCard label="Star Staff" value={stats.topStaff} color="text-purple-600 bg-purple-50" />
-        <MetricCard label="Busy Dept" value={stats.topDept} color="text-blue-600 bg-blue-50" />
+      <div className="grid grid-cols-2 gap-3 mt-4">
+        <MetricCard 
+          icon={<AlertCircle className="text-red-500" />}
+          title="Open Tickets"
+          value={stats.openTicketsCount}
+          color="bg-red-50 border-red-100"
+          onClick={onOpenTicketsClick}
+        />
+        <MetricCard 
+          icon={<DollarSign className="text-amber-500" />}
+          title="Total Cost"
+          value={`${currency}${stats.totalCost.toFixed(2)}`}
+          color="bg-white border-gray-200"
+        />
+        <MetricCard 
+          icon={<Award className="text-purple-500" />}
+          title="Top Staff Member"
+          value={stats.topStaff}
+          color="bg-purple-50 border-purple-100"
+        />
+        <MetricCard 
+          icon={<Building2 className="text-blue-500" />}
+          title="Top Dept"
+          value={stats.topDept}
+          color="bg-blue-50 border-blue-100"
+        />
       </div>
 
-      <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-6 flex items-center">
-        <Activity size={14} className="mr-2 text-indigo-500" /> Trend (Last 7 Logs)
+      {/* Department Quickview */}
+      <h2 className="text-lg font-semibold text-gray-700 mt-6 mb-2">Department Overview</h2>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+        {deptBreakdown.some(d => d.complaints > 0 || d.compliments > 0) ? (
+          deptBreakdown.filter(d => d.complaints > 0 || d.compliments > 0).map(item => (
+            <div key={item.dept} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2 last:border-0 last:pb-0">
+              <span className="text-gray-700 font-medium truncate flex-1 pr-2">{item.dept}</span>
+              <div className="flex space-x-3 shrink-0">
+                <span className="flex items-center text-green-600 font-bold w-8 justify-end"><ThumbsUp size={12} className="mr-1" />{item.compliments}</span>
+                <span className="flex items-center text-red-600 font-bold w-8 justify-end"><ThumbsDown size={12} className="mr-1" />{item.complaints}</span>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="text-sm text-gray-500 text-center">No feedback recorded in this period.</p>
+        )}
+      </div>
+
+      {/* 7-Day Trend Chart */}
+      <h2 className="text-lg font-semibold text-gray-700 mt-6 mb-2 flex items-center">
+        <Activity size={18} className="mr-2 text-indigo-500" /> 7-Day Trend
       </h2>
-      <div className="bg-white p-4 pt-10 rounded-2xl border border-gray-100 h-32 flex items-end justify-between space-x-1 shadow-sm">
-        {entries.slice(0, 7).reverse().map((e, i) => (
-            <div key={i} className={`flex-1 rounded-t-md ${e.type === 'compliment' ? 'bg-green-400' : 'bg-red-400'}`} style={{ height: '100%' }}></div>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 h-48 flex items-end justify-between space-x-1 pb-6 pt-8 relative">
+        {trendData.days.map((day, i) => (
+          <div key={i} className="flex flex-col items-center flex-1 group">
+            <div className="flex w-full justify-center items-end space-x-0.5 h-24">
+              {/* Compliment Bar */}
+              <div 
+                className="w-1/2 bg-green-400 rounded-t-sm transition-all" 
+                style={{ height: `${(day.compliments / trendData.maxVal) * 100}%` }}
+              ></div>
+              {/* Complaint Bar */}
+              <div 
+                className="w-1/2 bg-red-400 rounded-t-sm transition-all" 
+                style={{ height: `${(day.complaints / trendData.maxVal) * 100}%` }}
+              ></div>
+            </div>
+            <span className="text-[10px] text-gray-400 mt-2 rotate-45 transform origin-left">{day.label}</span>
+          </div>
         ))}
       </div>
     </div>
   );
 }
 
-function StatBox({ label, value, color }) {
+function MetricCard({ icon, title, value, color, onClick }) {
   return (
-    <div className={`${color} p-5 rounded-2xl border flex flex-col items-center justify-center`}>
-      <span className="text-4xl font-black leading-none">{value}</span>
-      <span className="text-[9px] font-black uppercase tracking-widest mt-2 opacity-70">{label}</span>
+    <div 
+      onClick={onClick}
+      className={`${color} p-3 rounded-xl shadow-sm border flex flex-col justify-between ${onClick ? 'cursor-pointer hover:shadow-md transition-all active:scale-[0.98]' : ''}`}
+    >
+      <div className="flex items-center space-x-2 mb-2">
+        {icon}
+        <span className="font-medium text-gray-600 text-xs">{title}</span>
+      </div>
+      <span className="font-bold text-gray-800 text-xl">{value}</span>
     </div>
   );
 }
 
-function MetricCard({ label, value, color, onClick }) {
-  return (
-    <div onClick={onClick} className={`${color} p-4 rounded-xl border border-gray-100 shadow-sm transition-transform active:scale-95 cursor-pointer`}>
-      <span className="text-[8px] font-black uppercase tracking-widest opacity-50 block mb-1">{label}</span>
-      <span className="text-sm font-black truncate block">{value}</span>
-    </div>
-  );
-}
-
+// --- ADD ENTRY FORM COMPONENT ---
 function AddEntryForm({ onSave, currency }) {
   const [type, setType] = useState('complaint');
-  const [form, setForm] = useState({ guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', handledBy: '', actionTaken: '', cost: '', status: 'resolved' });
+  const [fileName, setFileName] = useState('');
+  
+  const [formData, setFormData] = useState({
+    guestName: '',
+    guestEmail: '',
+    guestPhone: '',
+    department: DEPARTMENTS[0],
+    reason: '',
+    handledBy: '', 
+    actionTaken: '',
+    cost: '',
+    status: 'resolved',
+    followUpEmail: '',
+    staffMentioned: ''
+  });
 
-  const submit = (e) => {
-    e.preventDefault();
-    onSave({ ...form, type, date: new Date().toISOString(), sentiment: analyzeSentiment(form.reason), cost: Number(form.cost) || 0, comments: [] });
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setFileName(e.target.files[0].name);
+    }
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Trigger AI Sentiment Analysis
+    const sentiment = analyzeSentiment(formData.reason + " " + formData.actionTaken);
+
+    onSave({
+      ...formData,
+      type,
+      date: new Date().toISOString(),
+      cost: type === 'complaint' ? Number(formData.cost) : 0,
+      status: type === 'complaint' ? formData.status : 'resolved',
+      sentiment: sentiment,
+      attachedImage: fileName ? fileName : null,
+      comments: [] 
+    });
+    
+    setFormData(prev => ({
+        ...prev,
+        guestName: '', guestEmail: '', guestPhone: '',
+        reason: '', actionTaken: '', cost: '',
+        staffMentioned: ''
+    }));
+    setFileName('');
+  };
+
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
   return (
-    <form onSubmit={submit} className="p-4 space-y-4">
-      <div className="flex bg-gray-200 rounded-xl p-1 shadow-inner">
-        <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-3 text-xs font-black uppercase rounded-lg transition-all ${type === 'compliment' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>Compliment</button>
-        <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-3 text-xs font-black uppercase rounded-lg transition-all ${type === 'complaint' ? 'bg-white shadow text-red-600' : 'text-gray-500'}`}>Complaint</button>
+    <div className="p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex bg-gray-200 rounded-lg p-1 mb-6">
+        <button
+          type="button"
+          onClick={() => setType('compliment')}
+          className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'compliment' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}
+        >
+          Compliment
+        </button>
+        <button
+          type="button"
+          onClick={() => setType('complaint')}
+          className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'complaint' ? 'bg-white shadow text-red-600' : 'text-gray-500'}`}
+        >
+          Complaint
+        </button>
       </div>
-      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-        <input required value={form.guestName} onChange={e=>setForm({...form, guestName: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm font-bold outline-none" placeholder="Guest / Room No." />
-        <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm font-bold outline-none">{DEPARTMENTS.map(d => <option key={d}>{d}</option>)}</select>
-        <textarea required value={form.reason} onChange={e=>setForm({...form, reason: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none" placeholder="Reason..." />
-        <textarea required value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none" placeholder="Action Taken..." />
-      </div>
-      <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-100 shadow-sm">
-        <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full bg-white border border-indigo-200 rounded-xl p-4 text-sm font-black text-indigo-700 outline-none" placeholder="Your Name" />
-      </div>
-      {type === 'complaint' && (
-        <div className="grid grid-cols-2 gap-4">
-          <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="bg-white border border-gray-200 rounded-xl p-4 text-sm font-bold outline-none"><option value="open">Open</option><option value="resolved">Resolved</option></select>
-          <input type="number" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-200 rounded-xl p-4 text-sm font-black text-red-600 outline-none" placeholder="Cost" />
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
+            <h3 className="font-bold text-gray-800 border-b pb-2">Guest Details</h3>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Guest Name / Room No.</label>
+              <input required type="text" name="guestName" value={formData.guestName} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Room 412 or John Doe" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Guest Email</label>
+                  <input type="email" name="guestEmail" value={formData.guestEmail} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="guest@email.com" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Guest Phone</label>
+                  <input type="tel" name="guestPhone" value={formData.guestPhone} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="+1 234..." />
+                </div>
+            </div>
         </div>
-      )}
-      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm transition-transform active:scale-95">Sync to Cloud</button>
-    </form>
+
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
+            <h3 className="font-bold text-gray-800 border-b pb-2">Feedback Details</h3>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Department Mentioned</label>
+              <select name="department" value={formData.department} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Specific Issue / Reason</label>
+              <input required type="text" name="reason" value={formData.reason} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" placeholder={type === 'complaint' ? "e.g. Broken AC" : "e.g. Great food"} />
+            </div>
+
+            {type === 'complaint' && (
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start space-x-2">
+                <Lightbulb className="text-blue-500 shrink-0 mt-0.5" size={18} />
+                <div>
+                  <span className="block text-sm font-semibold text-blue-800 mb-0.5">Suggested Resolution:</span>
+                  <p className="text-xs text-blue-700 leading-relaxed">{SUGGESTED_RESOLUTIONS[formData.department]}</p>
+                </div>
+              </div>
+            )}
+
+            {type === 'compliment' && (
+              <div className="bg-green-50 p-3 rounded-lg border border-green-100 flex items-start space-x-2">
+                <Lightbulb className="text-green-500 shrink-0 mt-0.5" size={18} />
+                <div>
+                  <span className="block text-sm font-semibold text-green-800 mb-0.5">Suggested Action:</span>
+                  <p className="text-xs text-green-700 leading-relaxed">{SUGGESTED_COMPLIMENT_ACTIONS[formData.department]}</p>
+                </div>
+              </div>
+            )}
+
+            {type === 'compliment' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Staff Member Mentioned (Optional)</label>
+                <input 
+                  type="text" 
+                  name="staffMentioned"
+                  value={formData.staffMentioned || ''}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" 
+                  placeholder="Who did the guest praise?"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Action Taken</label>
+              <textarea required name="actionTaken" value={formData.actionTaken} onChange={handleChange} rows="2" className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Details..."></textarea>
+            </div>
+
+            {/* File Upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Attach Photo (Optional)</label>
+              <label className="flex items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                <Camera className="text-gray-400 mr-2" size={20} />
+                <span className="text-sm text-gray-500">{fileName ? fileName : 'Tap to upload photo'}</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+              </label>
+            </div>
+        </div>
+
+        <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm space-y-4">
+            <h3 className="font-bold text-indigo-900 border-b border-indigo-200 pb-2">Logged By</h3>
+            <div>
+              <label className="block text-sm font-medium text-indigo-800 mb-1">Your Name</label>
+              <input required type="text" name="handledBy" value={formData.handledBy} onChange={handleChange} className="w-full border border-indigo-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Jane Doe" />
+            </div>
+        </div>
+
+        {type === 'complaint' && (
+          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
+              <h3 className="font-bold text-gray-800 border-b pb-2">Ticket Resolution</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select name="status" value={formData.status} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                    <option value="open">Open</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost ({currency})</label>
+                  <input type="number" name="cost" min="0" step="0.01" value={formData.cost} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="0.00" />
+                </div>
+              </div>
+
+            {formData.status === 'open' && (
+              <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assigned Email for Follow-up</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input 
+                    type="email" 
+                    name="followUpEmail"
+                    value={formData.followUpEmail}
+                    onChange={handleChange}
+                    className="w-full border border-gray-300 rounded-lg py-3 pl-10 pr-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-amber-50" 
+                    placeholder="manager@hotel.com"
+                  />
+                </div>
+                <p className="text-xs text-amber-600 mt-1">We will track this email for the follow-up task.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl mt-4 hover:bg-indigo-700 transition-colors shadow-lg active:scale-95">
+          Submit & Sync to Cloud
+        </button>
+      </form>
+    </div>
   );
 }
 
+// --- HISTORY COMPONENT ---
 function History({ entries, onResolve, onAddComment, currency, filter, setFilter }) {
-  const [cmt, setCmt] = useState({});
-  const filtered = entries.filter(e => filter === 'all' ? true : e.status === filter);
+  const [newComment, setNewComment] = useState({});
 
-  if (entries.length === 0) return <div className="p-20 text-center font-black text-gray-300 uppercase text-xs italic">No records...</div>;
+  const handleSendEmail = (entry, type) => {
+    let subject, body, to;
+    if (type === 'manager') {
+      to = entry.followUpEmail;
+      subject = `Action Required: Open Hotel Complaint - ${entry.department}`;
+      body = `Hi,\n\nA new complaint has been logged and requires your follow-up.\n\nGuest: ${entry.guestName}\nDepartment: ${entry.department}\nIssue: ${entry.reason}\nAction Taken So Far: ${entry.actionTaken}\nLogged by: ${entry.handledBy}\n\nPlease review and resolve this ticket.\n\nThank you.`;
+    } else {
+      to = entry.guestEmail;
+      subject = entry.type === 'compliment' ? "Thank you for your wonderful feedback!" : "Following up on your recent experience";
+      body = entry.type === 'compliment' 
+        ? `Dear ${entry.guestName},\n\nThank you for your wonderful feedback regarding ${entry.reason}. We are thrilled you enjoyed your experience with our ${entry.department} team.\n\nIf you have a moment, we would highly appreciate it if you could share your positive experience in an online review.\n\nWe look forward to welcoming you back soon!\n\nWarm regards,\nThe Hotel Team`
+        : `Dear ${entry.guestName},\n\nThank you for bringing your concerns regarding ${entry.reason} to our attention. We sincerely apologize for the inconvenience you experienced with our ${entry.department} team.\n\nPlease know we take this seriously. We have noted the following action to resolve this: ${entry.actionTaken}.\n\nPlease let us know if we can assist in any way further to improve your stay with us.\n\nWarm regards,\nThe Hotel Team`;
+    }
+    
+    const mailtoLink = document.createElement('a');
+    mailtoLink.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    mailtoLink.target = '_blank';
+    document.body.appendChild(mailtoLink);
+    mailtoLink.click();
+    document.body.removeChild(mailtoLink);
+  };
+
+  const filteredEntries = entries.filter(e => {
+    if (filter === 'all') return true;
+    if (filter === 'open') return e.status === 'open';
+    if (filter === 'resolved') return e.status === 'resolved';
+    return true;
+  });
+
+  const getSLAStatus = (entry) => {
+    if (entry.type !== 'complaint' || entry.status !== 'open') return null;
+    const hoursOpen = (Date.now() - new Date(entry.date).getTime()) / 3600000;
+    
+    if (hoursOpen >= 2) {
+      return { text: `SLA Breached (${Math.floor(hoursOpen)}h open)`, color: 'bg-red-600 text-white animate-pulse' };
+    }
+    return { text: `Open (${Math.floor(hoursOpen * 60)}m elapsed)`, color: 'bg-amber-100 text-amber-800' };
+  };
+
+  const submitComment = (id) => {
+    const commentData = newComment[id];
+    if (!commentData || !commentData.text) return;
+    onAddComment(id, commentData.text, commentData.author);
+    setNewComment({ ...newComment, [id]: { text: '', author: '' } });
+  };
+
+  if (entries.length === 0) {
+    return (
+      <div className="p-8 text-center text-gray-500 flex flex-col items-center h-full justify-center">
+        <List size={48} className="mb-4 text-gray-300" />
+        <p>No feedback recorded yet.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex bg-gray-200 rounded-xl p-1 mb-4 shadow-inner">
-        {['all', 'open', 'resolved'].map(f => (
-          <button key={f} onClick={() => setFilter(f)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${filter === f ? 'bg-white shadow text-indigo-700' : 'text-gray-400'}`}>{f}</button>
-        ))}
+    <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      <div className="flex bg-gray-200 rounded-lg p-1 mb-4 shadow-inner">
+        <button onClick={() => setFilter('all')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${filter === 'all' ? 'bg-white shadow text-indigo-700' : 'text-gray-500'}`}>All</button>
+        <button onClick={() => setFilter('open')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${filter === 'open' ? 'bg-white shadow text-amber-600' : 'text-gray-500'}`}>Open Issues</button>
+        <button onClick={() => setFilter('resolved')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${filter === 'resolved' ? 'bg-white shadow text-gray-700' : 'text-gray-500'}`}>Resolved</button>
       </div>
-      {filtered.map(entry => (
-        <div key={entry.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 border-l-4" style={{ borderLeftColor: entry.type === 'compliment' ? '#10b981' : '#ef4444' }}>
-          <div className="flex justify-between items-start mb-3">
-            <span className={`text-[8px] px-2 py-0.5 rounded-full font-black border ${entry.sentiment?.color || 'bg-gray-50 text-gray-400'}`}>{entry.sentiment?.label || 'Neutral'}</span>
-            <span className="text-[9px] font-bold text-gray-300">{new Date(entry.date).toLocaleDateString()}</span>
-          </div>
-          <h3 className="font-black text-gray-800 text-lg leading-tight mb-1">{entry.guestName}</h3>
-          <p className="text-sm font-bold text-gray-600 leading-snug">{entry.reason}</p>
-          <div className="mt-4 p-4 bg-gray-50 rounded-xl text-xs text-gray-600 italic border border-gray-100">"{entry.actionTaken}"</div>
-          <div className="mt-5 space-y-2">
-            {entry.comments?.map((c, i) => (
-              <div key={i} className="text-[10px] bg-indigo-50/50 p-2 rounded-lg border border-indigo-100/50">
-                <span className="font-black text-indigo-700 uppercase">{c.author}:</span> {c.text}
+
+      {filteredEntries.map(entry => {
+        const sla = getSLAStatus(entry);
+        
+        return (
+          <div key={entry.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col relative overflow-hidden">
+            {entry.type === 'complaint' && (
+              <div className={`absolute top-0 left-0 w-full h-1 ${entry.status === 'open' ? 'bg-amber-400' : 'bg-gray-200'}`}></div>
+            )}
+
+            <div className="flex justify-between items-start mb-2 mt-1">
+              <div className="flex items-center space-x-2">
+                {entry.type === 'compliment' ? <ThumbsUp className="text-green-500" size={18} /> : <ThumbsDown className="text-red-500" size={18} />}
+                <span className={`text-sm font-bold uppercase tracking-wider ${entry.type === 'compliment' ? 'text-green-700' : 'text-red-700'}`}>{entry.type}</span>
+                
+                {/* AI Sentiment Badge */}
+                {entry.sentiment && (
+                  <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${entry.sentiment.color} border-opacity-50`}>
+                    {entry.sentiment.emoji} {entry.sentiment.label}
+                  </span>
+                )}
               </div>
-            ))}
-            <div className="flex space-x-2 mt-2">
-              <input value={cmt[entry.id] || ''} onChange={e=>setCmt({...cmt, [entry.id]: e.target.value})} placeholder="Note..." className="flex-1 bg-gray-50 border border-gray-100 rounded-lg p-2 text-xs outline-none" />
-              <button onClick={()=>{ if(!cmt[entry.id]) return; onAddComment(entry.id, cmt[entry.id], "Staff"); setCmt({...cmt, [entry.id]:''}); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-black text-[10px]">POST</button>
+              
+              <div className="flex flex-col items-end space-y-1">
+                <span className="text-xs text-gray-400 flex items-center">
+                  <Calendar size={12} className="mr-1" />
+                  {new Date(entry.date).toLocaleDateString()}
+                </span>
+                
+                {/* SLA Timer / Status Badge */}
+                {entry.type === 'complaint' && (
+                  entry.status === 'open' && sla ? (
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold shadow-sm ${sla.color}`}>
+                      <Clock size={10} className="mr-1" /> {sla.text}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                      <CheckCircle size={10} className="mr-1" /> Resolved
+                    </span>
+                  )
+                )}
+              </div>
             </div>
+            
+            <h3 className="font-semibold text-gray-800 text-lg">{entry.guestName}</h3>
+            
+            <div className="grid grid-cols-2 gap-y-2 mt-3 text-sm">
+              {entry.guestEmail && (
+                <div className="col-span-2">
+                  <span className="text-gray-500 block text-xs">Guest Email</span>
+                  <span className="font-medium text-blue-600 text-sm flex items-center">
+                    <Mail size={12} className="mr-1" /> {entry.guestEmail}
+                  </span>
+                </div>
+              )}
+              {entry.guestPhone && (
+                <div className="col-span-2">
+                  <span className="text-gray-500 block text-xs">Guest Phone</span>
+                  <span className="font-medium text-blue-600 text-sm flex items-center">
+                    <Phone size={12} className="mr-1" /> {entry.guestPhone}
+                  </span>
+                </div>
+              )}
+              <div className="col-span-2">
+                <span className="text-gray-500 block text-[10px] uppercase font-bold tracking-wider mb-0.5 mt-1">Issue / Reason</span>
+                <span className="font-medium text-gray-800 text-base leading-snug">{entry.reason || 'Not specified'}</span>
+              </div>
+              <div>
+                <span className="text-gray-500 block text-xs mt-2">Department</span>
+                <span className="font-medium text-gray-800">{entry.department}</span>
+              </div>
+              <div>
+                <span className="text-gray-500 block text-xs mt-2">Handled By</span>
+                <span className="font-medium text-gray-800">{entry.handledBy}</span>
+              </div>
+              {entry.type === 'compliment' && entry.staffMentioned && (
+                <div className="col-span-2">
+                  <span className="text-gray-500 block text-xs">Staff Praised</span>
+                  <span className="font-medium text-indigo-600 flex items-center mt-1">
+                    <Award size={14} className="mr-1" /> {entry.staffMentioned}
+                  </span>
+                </div>
+              )}
+              {entry.type === 'complaint' && (
+                <div>
+                  <span className="text-gray-500 block text-xs mt-2">Cost</span>
+                  <span className="font-medium text-red-600">{currency}{Number(entry.cost).toFixed(2)}</span>
+                </div>
+              )}
+              {entry.status === 'open' && entry.followUpEmail && (
+                <div className="col-span-2 mt-2 bg-amber-50 p-2 rounded-lg border border-amber-100 flex items-center">
+                  <Mail size={14} className="text-amber-600 mr-2 shrink-0" />
+                  <span className="text-xs text-amber-800"><span className="font-semibold">Follow-up assigned to:</span> {entry.followUpEmail}</span>
+                </div>
+              )}
+            </div>
+
+            {entry.attachedImage && (
+              <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-100 flex items-center">
+                <ImageIcon size={16} className="text-gray-400 mr-2" />
+                <span className="text-xs text-gray-600 truncate flex-1">Image Attached: {entry.attachedImage}</span>
+              </div>
+            )}
+            
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <span className="text-gray-500 block text-xs mb-1">Action Taken</span>
+              <p className="text-gray-700 text-sm leading-relaxed">{entry.actionTaken}</p>
+            </div>
+
+            {/* Internal Comments System */}
+            {entry.status === 'open' && (
+              <div className="mt-4 bg-gray-50 rounded-xl p-3 border border-gray-200">
+                <h4 className="text-xs font-bold text-gray-600 mb-2 flex items-center">
+                  <MessageSquare size={12} className="mr-1" /> Internal Notes
+                </h4>
+                
+                <div className="space-y-2 mb-3 max-h-32 overflow-y-auto">
+                  {(!entry.comments || entry.comments.length === 0) ? (
+                    <p className="text-[10px] text-gray-400 italic">No notes added yet.</p>
+                  ) : (
+                    entry.comments.map((comment, idx) => (
+                      <div key={idx} className="bg-white p-2 rounded border border-gray-100 text-xs">
+                        <span className="font-bold text-indigo-700 mr-1">{comment.author}:</span>
+                        <span className="text-gray-700">{comment.text}</span>
+                        <div className="text-[9px] text-gray-400 mt-1 text-right">
+                          {new Date(comment.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="flex flex-col space-y-2">
+                  <div className="flex space-x-2">
+                    <input 
+                      type="text" 
+                      placeholder="Your Name..."
+                      value={newComment[entry.id]?.author || ''}
+                      onChange={(e) => setNewComment({...newComment, [entry.id]: { ...newComment[entry.id], author: e.target.value }})}
+                      className="w-1/3 border border-gray-300 rounded px-2 py-1.5 text-xs outline-none focus:border-indigo-500"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Add an update..."
+                      value={newComment[entry.id]?.text || ''}
+                      onChange={(e) => setNewComment({...newComment, [entry.id]: { ...newComment[entry.id], text: e.target.value }})}
+                      className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs outline-none focus:border-indigo-500"
+                    />
+                    <button onClick={() => submitComment(entry.id)} className="bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-indigo-700">
+                      Post
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {entry.guestEmail && (
+              <button 
+                onClick={() => handleSendEmail(entry, 'guest')}
+                className={`mt-4 w-full font-semibold py-2 rounded-lg border transition-colors text-sm flex items-center justify-center shadow-sm ${
+                  entry.type === 'compliment' 
+                    ? 'bg-green-50 hover:bg-green-100 text-green-700 border-green-200' 
+                    : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
+                }`}
+              >
+                <Send size={16} className="mr-2" /> 
+                {entry.type === 'compliment' ? 'Send Guest Review Request' : 'Send Guest Apology / Check-in'}
+              </button>
+            )}
+
+            {entry.status === 'open' && entry.followUpEmail && (
+              <button 
+                onClick={() => handleSendEmail(entry, 'manager')}
+                className="mt-2 w-full bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-3 rounded-lg border border-blue-200 transition-colors text-sm flex items-center justify-center shadow-sm"
+              >
+                <Mail size={16} className="mr-2" /> Send Manager Alert Now
+              </button>
+            )}
+
+            {entry.status === 'open' && (
+              <button 
+                onClick={() => onResolve(entry.id)}
+                className="mt-2 w-full bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold py-3 rounded-lg border border-amber-200 transition-colors text-sm flex items-center justify-center shadow-sm"
+              >
+                <CheckCircle size={16} className="mr-2" /> Mark as Finalized & Resolved
+              </button>
+            )}
           </div>
-          {entry.status === 'open' && (
-             <button onClick={() => onResolve(entry.id)} className="w-full bg-amber-500 text-white py-3 rounded-xl text-[10px] font-black uppercase mt-4 shadow-lg">Close Ticket</button>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
