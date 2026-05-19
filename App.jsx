@@ -264,7 +264,7 @@ export default function App() {
 
   if (loading && !cloudError) {
     return (
-      <div className="flex flex-col h-screen bg-[#f6ebda] items-center justify-center max-w-md mx-auto p-10 text-center font-sans">
+      <div className="flex flex-col h-screen w-full bg-[#f6ebda] items-center justify-center text-center font-sans">
         <Loader2 className="animate-spin text-[#003040] mb-4" size={48} />
         <p className="text-[#003040] font-medium animate-pulse">Syncing with secure cloud...</p>
       </div>
@@ -272,41 +272,65 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-[#f6ebda] font-sans max-w-md mx-auto shadow-2xl relative overflow-hidden">
+    <div className="flex flex-col h-screen w-full bg-[#f6ebda] font-sans relative overflow-hidden">
+      {/* GLOBAL TOAST */}
       {toast && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 w-[90%] bg-gray-800 text-white px-4 py-3 rounded-xl shadow-2xl z-50 text-sm text-center font-medium animate-in fade-in slide-in-from-top-4 flex items-center justify-center space-x-2">
-          <CheckCircle size={18} className="text-green-400 shrink-0" />
+        <div className="absolute top-20 md:top-6 left-1/2 transform -translate-x-1/2 w-[90%] md:w-auto md:min-w-[300px] bg-gray-800 text-white px-6 py-4 rounded-xl shadow-2xl z-50 text-sm text-center font-medium animate-in fade-in slide-in-from-top-4 flex items-center justify-center space-x-3">
+          <CheckCircle size={20} className="text-green-400 shrink-0" />
           <span>{toast}</span>
         </div>
       )}
 
-      <header className="bg-[#003040] text-white p-4 shadow-md z-10">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold tracking-wide">Feedback Tracker</h1>
-            <div className="flex items-center text-[10px] text-[#a0c8d2] font-semibold tracking-wider mt-0.5">
-              <RefreshCw size={8} className="mr-1 animate-spin" /> Live Sync Active
-            </div>
+      {/* HEADER TOP BAR */}
+      <header className="bg-[#003040] text-white px-4 md:px-8 py-4 shadow-md z-20 w-full flex justify-between items-center">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold tracking-wide">Onomo Feedback Tracker</h1>
+          <div className="flex items-center text-[10px] md:text-xs text-[#a0c8d2] font-semibold tracking-wider mt-0.5 md:mt-1">
+            <RefreshCw size={10} className="mr-1.5 animate-spin" /> Live Sync Active
           </div>
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="bg-[#003040]/80 text-white border border-[#a0c8d2]/20 rounded p-1 text-xs outline-none focus:ring-2 focus:ring-[#a0c8d2] cursor-pointer font-semibold">
-            <option value="$">USD ($)</option><option value="€">EUR (€)</option><option value="£">GBP (£)</option><option value="R">ZAR (R)</option>
-          </select>
         </div>
+        <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="bg-[#003040]/80 text-white border border-[#a0c8d2]/20 rounded p-1.5 md:p-2 text-xs md:text-sm outline-none focus:ring-2 focus:ring-[#a0c8d2] cursor-pointer font-semibold shadow-sm hover:bg-[#003040]">
+          <option value="$">USD ($)</option><option value="€">EUR (€)</option><option value="£">GBP (£)</option><option value="R">ZAR (R)</option>
+        </select>
       </header>
       
       {cloudError && (
-        <div className="bg-[#8e2a2a] text-white px-4 py-3 text-xs font-semibold flex items-center justify-center text-center z-20 shadow-md">
-          <AlertCircle size={14} className="mr-2 shrink-0" /> {cloudError}
+        <div className="bg-[#8e2a2a] text-white px-4 py-3 text-xs md:text-sm font-semibold flex items-center justify-center text-center z-20 shadow-md">
+          <AlertCircle size={16} className="mr-2 shrink-0" /> {cloudError}
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto pb-32 relative">
-        {activeTab === 'dashboard' && <Dashboard entries={entries} currency={currency} exchangeRates={exchangeRates} onOpenTicketsClick={() => { setHistoryFilter('open'); setActiveTab('history'); }} onStatClick={(filter) => { setHistoryFilter(filter); setActiveTab('history'); }} />}
-        {activeTab === 'add' && <AddEntryForm onSave={addEntry} currency={currency} exchangeRates={exchangeRates} />}
-        {activeTab === 'history' && <History entries={entries} onResolve={resolveEntry} onAddComment={addComment} onMarkEmailSent={markEmailSent} currency={currency} exchangeRates={exchangeRates} filter={historyFilter} setFilter={setHistoryFilter} ticker={timeTicker} />}
-      </main>
+      {/* DESKTOP/MOBILE SPLIT LAYOUT */}
+      <div className="flex flex-1 overflow-hidden w-full relative">
+        
+        {/* DESKTOP SIDEBAR NAVIGATION */}
+        <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 z-10 shadow-[2px_0_10px_rgba(0,0,0,0.02)] flex-shrink-0 relative">
+          <nav className="flex-1 px-4 py-8 space-y-3">
+            {['dashboard', 'add', 'history'].map((tab) => (
+              <button key={tab} onClick={() => { setActiveTab(tab); if(tab==='history') setHistoryFilter('all'); }} className={`flex items-center w-full px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === tab ? 'text-[#f18a00] bg-[#f18a00]/10 font-bold shadow-sm' : 'text-gray-500 hover:text-[#003040] hover:bg-gray-50 font-medium'}`}>
+                {tab === 'dashboard' ? <Home size={20} className="mr-3 shrink-0" /> : tab === 'add' ? <PlusCircle size={20} className="mr-3 shrink-0" /> : <List size={20} className="mr-3 shrink-0" />}
+                <span className="text-sm capitalize">{tab === 'add' ? 'New Entry' : tab}</span>
+              </button>
+            ))}
+          </nav>
+          
+          <div className="p-4 m-4 bg-slate-900 text-white/60 text-[10px] rounded-xl font-mono flex flex-col space-y-2 border border-slate-800 shadow-inner">
+            <div className="flex items-center space-x-1.5 border-b border-white/10 pb-2"><ShieldCheck size={12} className={user ? "text-green-400" : "text-amber-400"} /><span className="uppercase font-bold text-white/90 tracking-widest">System Link</span></div>
+            <div className="flex justify-between items-center pt-1"><span>UID: <span className="text-blue-300">{user?.uid?.substring(0,6) || "..."}</span></span><span>{user ? "ONLINE" : "ERROR"}</span></div>
+            <div className="flex justify-between items-center"><span>SYNC:</span><span className="text-white font-bold">{lastSync || "..."}</span></div>
+          </div>
+        </aside>
 
-      <nav className="bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around p-2 z-10 pb-safe">
+        {/* MAIN SCROLLABLE CONTENT */}
+        <main className="flex-1 overflow-y-auto pb-24 md:pb-8 relative w-full">
+          {activeTab === 'dashboard' && <Dashboard entries={entries} currency={currency} exchangeRates={exchangeRates} onOpenTicketsClick={() => { setHistoryFilter('open'); setActiveTab('history'); }} onStatClick={(filter) => { setHistoryFilter(filter); setActiveTab('history'); }} />}
+          {activeTab === 'add' && <AddEntryForm onSave={addEntry} currency={currency} exchangeRates={exchangeRates} />}
+          {activeTab === 'history' && <History entries={entries} onResolve={resolveEntry} onAddComment={addComment} onMarkEmailSent={markEmailSent} currency={currency} exchangeRates={exchangeRates} filter={historyFilter} setFilter={setHistoryFilter} ticker={timeTicker} />}
+        </main>
+      </div>
+
+      {/* MOBILE BOTTOM NAVIGATION */}
+      <nav className="md:hidden bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around p-2 z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
         {['dashboard', 'add', 'history'].map((tab) => (
           <button key={tab} onClick={() => { setActiveTab(tab); if(tab==='history') setHistoryFilter('all'); }} className={`flex flex-col items-center p-2 rounded-lg w-1/3 transition-colors ${activeTab === tab ? 'text-[#f18a00] bg-[#f18a00]/10' : 'text-gray-500 hover:text-[#003040]'}`}>
             {tab === 'dashboard' ? <Home size={24} /> : tab === 'add' ? <PlusCircle size={24} /> : <List size={24} />}
@@ -315,8 +339,9 @@ export default function App() {
         ))}
       </nav>
       
-      <div className="absolute bottom-[72px] left-0 w-full bg-slate-900 text-white/60 px-3 py-1 text-[8px] font-mono flex justify-between border-t border-white/10 z-10 pointer-events-none">
-        <span>Shared Environment Link Up: Validated</span>
+      {/* MOBILE DIAGNOSTICS */}
+      <div className="md:hidden absolute bottom-[72px] left-0 w-full bg-slate-900 text-white/60 px-3 py-1 text-[8px] font-mono flex justify-between border-t border-white/10 z-20 pointer-events-none">
+        <span>Link Up: Validated</span>
         {lastSync && <span>Sync: {lastSync}</span>}
       </div>
     </div>
@@ -445,70 +470,100 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
   };
 
   return (
-    <div className="p-4 space-y-4 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center mb-2">
-        <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-white border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-[#003040] focus:border-[#003040] block p-2 font-medium shadow-sm">
-          <option value="1">Today</option><option value="7">Last 7 Days</option><option value="30">Last 30 Days</option><option value="all">All Time</option>
-        </select>
-        <div className="flex space-x-2">
-          <button onClick={generateEODReport} className="flex items-center text-xs bg-[#cf6231] text-white px-2 py-2 rounded-lg font-semibold hover:bg-[#cf6231]/90 transition-colors shadow-sm">
-            <Mail size={14} className="mr-1" /> EOD Report
+    <div className="p-4 md:p-8 space-y-4 md:space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+      
+      {/* CONTROLS ROW */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-3 md:space-y-0 bg-white p-3 md:p-4 rounded-xl border border-gray-200 shadow-sm">
+        <div className="flex items-center space-x-3 w-full md:w-auto">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest hidden md:block">Filter:</span>
+          <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-gray-50 border border-gray-300 text-gray-800 text-sm rounded-lg focus:ring-[#003040] focus:border-[#003040] block p-2 font-medium w-full md:w-auto">
+            <option value="1">Today</option><option value="7">Last 7 Days</option><option value="30">Last 30 Days</option><option value="all">All Time</option>
+          </select>
+        </div>
+        
+        <div className="flex space-x-2 w-full md:w-auto">
+          <button onClick={generateEODReport} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#cf6231] text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-[#cf6231]/90 transition-colors shadow-sm">
+            <Mail size={16} className="mr-2" /> EOD Report
           </button>
-          <button onClick={exportCSV} className="flex items-center text-xs bg-[#003040] text-white px-2 py-2 rounded-lg font-semibold hover:bg-[#003040]/90 transition-colors shadow-sm">
-            <Download size={14} className="mr-1" /> CSV
+          <button onClick={exportCSV} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#003040] text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-[#003040]/90 transition-colors shadow-sm">
+            <Download size={16} className="mr-2" /> Export CSV
           </button>
         </div>
       </div>
       
-      <div className="grid grid-cols-3 gap-2">
-        <StatBox label="Praises" value={stats.comps} color="text-green-700 bg-green-50 border-green-100 hover:bg-green-100 cursor-pointer transition-colors" onClick={() => onStatClick('compliment')} />
-        <StatBox label="Complaints" value={stats.complaints} color="text-[#8e2a2a] bg-[#8e2a2a]/5 border-[#8e2a2a]/10 hover:bg-[#8e2a2a]/10 cursor-pointer transition-colors" onClick={() => onStatClick('complaint')} />
-        <StatBox label="Incidents" value={stats.incidents} color="text-[#003040] bg-[#a0c8d2]/20 border-[#a0c8d2]/40 hover:bg-[#a0c8d2]/40 cursor-pointer transition-colors" onClick={() => onStatClick('incident')} />
+      {/* 3-COLUMN METRICS (RESPONSIVE) */}
+      <div className="grid grid-cols-3 gap-2 md:gap-6">
+        <StatBox label="Praises" value={stats.comps} color="text-[#595733] bg-[#595733]/10 border-[#595733]/20 hover:bg-[#595733]/20 cursor-pointer transition-colors" onClick={() => onStatClick('compliment')} />
+        <StatBox label="Complaints" value={stats.complaints} color="text-[#8e2a2a] bg-[#8e2a2a]/10 border-[#8e2a2a]/20 hover:bg-[#8e2a2a]/20 cursor-pointer transition-colors" onClick={() => onStatClick('complaint')} />
+        <StatBox label="Incidents" value={stats.incidents} color="text-[#003040] bg-[#a0c8d2]/30 border-[#a0c8d2]/40 hover:bg-[#a0c8d2]/50 cursor-pointer transition-colors" onClick={() => onStatClick('incident')} />
       </div>
       
-      <div className="grid grid-cols-2 gap-4">
-        <MetricCard label="Open Issues" value={stats.open} color="bg-red-50 border-red-100 text-[#8e2a2a]" onClick={onOpenTicketsClick} icon={<AlertCircle size={16} />} />
-        <MetricCard label="Total Cost" value={`${currency}${stats.cost.toFixed(2)}`} color="bg-white border-gray-200 text-gray-800" icon={<Coins size={16} />} />
+      {/* 2-COLUMN BOTTOM METRICS */}
+      <div className="grid grid-cols-2 gap-4 md:gap-6">
+        <MetricCard label="Tickets Open" value={stats.open} color="bg-white border-red-200 text-[#8e2a2a]" onClick={onOpenTicketsClick} icon={<AlertCircle size={18} className="text-[#8e2a2a]" />} />
+        <MetricCard label="Total Resolution Cost" value={`${currency}${stats.cost.toFixed(2)}`} color="bg-white border-gray-200 text-[#003040]" icon={<Coins size={18} className="text-[#a0c8d2]" />} />
       </div>
 
-      <h2 className="text-lg font-semibold text-gray-700 mt-6 mb-2 flex items-center">
-        <Trophy size={18} className="mr-2 text-[#ffb131]" /> Staff Performance Board
-      </h2>
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 space-y-3 shadow-sm">
-        {staffLeaderboard.map((member, index) => {
-          const medalColors = ["text-[#ffb131]", "text-slate-400", "text-[#cf6231]"];
-          return (
-            <div key={member.name} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2 last:border-0 last:pb-0">
-              <div className="flex items-center space-x-3 truncate">
-                <span className="w-5 text-center font-bold">
-                  {index < 3 ? <Medal size={18} className={medalColors[index]} /> : index + 1}
-                </span>
-                <span className="font-semibold text-gray-800 truncate">{member.name}</span>
+      {/* SIDE-BY-SIDE ON DESKTOP */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        
+        {/* LEADERBOARD */}
+        <div className="flex flex-col">
+          <h2 className="text-lg md:text-xl font-bold text-[#003040] mb-3 flex items-center">
+            <Trophy size={20} className="mr-2 text-[#ffb131]" /> Staff Performance Board
+          </h2>
+          <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 space-y-4 shadow-sm flex-1">
+            {staffLeaderboard.map((member, index) => {
+              const medalColors = ["text-[#ffb131]", "text-slate-400", "text-[#cf6231]"];
+              return (
+                <div key={member.name} className="flex justify-between items-center text-sm md:text-base border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                  <div className="flex items-center space-x-3 md:space-x-4 truncate">
+                    <span className="w-6 md:w-8 text-center font-bold">
+                      {index < 3 ? <Medal size={22} className={medalColors[index]} /> : <span className="text-gray-400">{index + 1}</span>}
+                    </span>
+                    <span className="font-semibold text-gray-800 truncate">{member.name}</span>
+                  </div>
+                  <span className="bg-[#ffb131]/10 text-[#cf6231] font-bold text-xs md:text-sm px-3 md:px-4 py-1.5 rounded-full flex items-center">
+                    <ThumbsUp size={14} className="mr-1.5" /> {member.count} Praises
+                  </span>
+                </div>
+              );
+            })}
+            {staffLeaderboard.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-gray-400 opacity-60">
+                 <Trophy size={48} className="mb-3" />
+                 <p className="italic text-sm">No staff mentions captured yet.</p>
               </div>
-              <span className="bg-[#ffb131]/10 text-[#cf6231] font-bold text-xs px-3 py-1 rounded-full flex items-center">
-                 <ThumbsUp size={12} className="mr-1" /> {member.count} Praises
-              </span>
-            </div>
-          );
-        })}
-        {staffLeaderboard.length === 0 && (
-          <p className="text-center text-gray-400 italic text-sm py-2">No staff mentions captured yet.</p>
-        )}
-      </div>
-
-      <h2 className="text-lg font-semibold text-gray-700 mt-6 mb-2 flex items-center">
-        <Activity size={18} className="mr-2 text-[#a0c8d2]" /> 7-Day Trend
-      </h2>
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 h-48 flex items-end justify-between space-x-1 pb-6 pt-8 relative shadow-sm">
-        {trendData.days.map((day, i) => (
-          <div key={i} className="flex flex-col items-center flex-1 group">
-            <div className="flex w-full justify-center items-end space-x-0.5 h-24">
-              <div className="w-1/2 bg-[#595733] rounded-t-sm transition-all" style={{ height: `${(day.compliments / trendData.maxVal) * 100}%` }}></div>
-              <div className="w-1/2 bg-[#8e2a2a] rounded-t-sm transition-all" style={{ height: `${(day.complaints / trendData.maxVal) * 100}%` }}></div>
-            </div>
-            <span className="text-[10px] text-gray-400 mt-2 rotate-45 transform origin-left">{day.label}</span>
+            )}
           </div>
-        ))}
+        </div>
+
+        {/* 7-DAY TREND */}
+        <div className="flex flex-col">
+          <h2 className="text-lg md:text-xl font-bold text-[#003040] mb-3 flex items-center">
+            <Activity size={20} className="mr-2 text-[#a0c8d2]" /> 7-Day Issue Trend
+          </h2>
+          <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 flex-1 flex flex-col justify-end min-h-[220px] shadow-sm">
+            <div className="flex items-end justify-between space-x-1 md:space-x-2 h-40 relative">
+              {/* Legend overlay */}
+              <div className="absolute top-0 right-0 flex flex-col items-end space-y-1 opacity-60">
+                 <span className="text-[10px] font-bold text-[#595733] flex items-center"><span className="w-2 h-2 bg-[#595733] mr-1 rounded-sm"></span> Praises</span>
+                 <span className="text-[10px] font-bold text-[#8e2a2a] flex items-center"><span className="w-2 h-2 bg-[#8e2a2a] mr-1 rounded-sm"></span> Issues</span>
+              </div>
+
+              {trendData.days.map((day, i) => (
+                <div key={i} className="flex flex-col items-center flex-1 group h-full justify-end pb-6 relative">
+                  <div className="flex w-full justify-center items-end space-x-0.5 h-full">
+                    <div className="w-1/2 bg-[#595733] rounded-t-sm transition-all hover:opacity-80" style={{ height: `${(day.compliments / trendData.maxVal) * 100}%` }}></div>
+                    <div className="w-1/2 bg-[#8e2a2a] rounded-t-sm transition-all hover:opacity-80" style={{ height: `${(day.complaints / trendData.maxVal) * 100}%` }}></div>
+                  </div>
+                  <span className="text-[10px] md:text-xs text-gray-500 font-medium absolute bottom-0">{day.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -516,21 +571,21 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
 
 function StatBox({ label, value, color, onClick }) {
   return (
-    <div onClick={onClick} className={`${color} p-4 rounded-2xl border shadow-sm flex flex-col items-center justify-center ${onClick ? 'active:scale-95' : ''}`}>
-      <span className="text-2xl font-bold leading-none">{value}</span>
-      <span className="text-[10px] font-semibold text-center mt-1 opacity-80">{label}</span>
+    <div onClick={onClick} className={`${color} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center ${onClick ? 'active:scale-95' : ''}`}>
+      <span className="text-3xl md:text-4xl font-bold leading-none mb-1 md:mb-2">{value}</span>
+      <span className="text-xs md:text-sm font-semibold text-center opacity-80 uppercase tracking-widest">{label}</span>
     </div>
   );
 }
 
 function MetricCard({ label, value, color, onClick, icon }) {
   return (
-    <div onClick={onClick} className={`${color} p-3 rounded-xl border shadow-sm transition-all active:scale-[0.98] ${onClick ? 'cursor-pointer hover:shadow-md' : ''} flex flex-col justify-between`}>
-      <div className="flex items-center space-x-2 mb-1">
+    <div onClick={onClick} className={`${color} p-4 md:p-6 rounded-2xl border shadow-sm transition-all active:scale-[0.98] ${onClick ? 'cursor-pointer hover:shadow-md hover:border-gray-300' : ''} flex flex-col justify-between`}>
+      <div className="flex items-center space-x-2 mb-2">
         {icon}
-        <span className="text-xs font-medium opacity-70">{label}</span>
+        <span className="text-xs md:text-sm font-bold opacity-70 uppercase tracking-widest">{label}</span>
       </div>
-      <span className="text-lg font-bold truncate block">{value}</span>
+      <span className="text-2xl md:text-3xl font-bold truncate block text-[#003040]">{value}</span>
     </div>
   );
 }
@@ -570,7 +625,6 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
       const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(formattedMsg)}`;
       
       whatsappCallback = () => {
-        // Target a specific window name to prevent duplicate tabs
         window.open(whatsappUrl, 'whatsapp_shared_tab');
       };
     }
@@ -585,124 +639,157 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
   };
 
   return (
-    <form onSubmit={submit} className="p-4 space-y-4 font-sans">
-      <div className="flex bg-gray-200 rounded-lg p-1 mb-6">
-        <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === 'compliment' ? 'bg-white shadow text-[#595733]' : 'text-gray-500'}`}>Compliment</button>
-        <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === 'complaint' ? 'bg-white shadow text-[#8e2a2a]' : 'text-gray-500'}`}>Complaint</button>
-        <button type="button" onClick={() => setType('incident')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === 'incident' ? 'bg-white shadow text-[#003040]' : 'text-gray-500'}`}>Incident</button>
+    <form onSubmit={submit} className="p-4 md:p-8 space-y-4 md:space-y-6 font-sans max-w-4xl mx-auto animate-in fade-in duration-500">
+      
+      {/* TOP TAB TOGGLES */}
+      <div className="flex bg-white border border-gray-200 rounded-xl p-1.5 shadow-sm">
+        <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-2.5 md:py-3 text-xs md:text-sm font-bold rounded-lg transition-all ${type === 'compliment' ? 'bg-[#595733]/10 shadow-sm text-[#595733]' : 'text-gray-500 hover:bg-gray-50'}`}>Compliment</button>
+        <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-2.5 md:py-3 text-xs md:text-sm font-bold rounded-lg transition-all ${type === 'complaint' ? 'bg-[#8e2a2a]/10 shadow-sm text-[#8e2a2a]' : 'text-gray-500 hover:bg-gray-50'}`}>Complaint</button>
+        <button type="button" onClick={() => setType('incident')} className={`flex-1 py-2.5 md:py-3 text-xs md:text-sm font-bold rounded-lg transition-all ${type === 'incident' ? 'bg-[#003040]/10 shadow-sm text-[#003040]' : 'text-gray-500 hover:bg-gray-50'}`}>Incident Log</button>
       </div>
 
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
-        <h3 className="font-bold text-gray-800 border-b pb-2">{type === 'incident' ? 'Incident Location/Guest' : 'Guest Details'}</h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{type === 'incident' ? 'Guest Name or Specific Area' : 'Guest Name / Room No.'}</label>
-          <input required value={form.guestName} onChange={e=>setForm({...form, guestName: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="e.g. Room 412 or Lobby Area" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Guest Email</label>
-            <input type="email" value={form.guestEmail} onChange={e=>setForm({...form, guestEmail: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="guest@email.com" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Guest Phone</label>
-            <input type="tel" value={form.guestPhone} onChange={e=>setForm({...form, guestPhone: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="+1 234..." />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
-        <h3 className="font-bold text-gray-800 border-b pb-2">Feedback Details</h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Department Mentioned</label>
-          <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040]">
-            {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Specific Issue / Reason</label>
-          <input required value={form.reason} onChange={e=>setForm({...form, reason: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder={type !== 'compliment' ? "Provide details to auto-classify escalation..." : "e.g. Great food"} />
-        </div>
+      <div className="bg-white p-5 md:p-8 rounded-2xl border border-gray-200 shadow-sm space-y-5">
+        <h3 className="font-bold text-xl text-[#003040] border-b border-gray-100 pb-3 flex items-center">
+          <Users className="mr-2 text-[#a0c8d2]" size={20} /> {type === 'incident' ? 'Incident Location/Guest' : 'Guest Details'}
+        </h3>
         
-        {/* RESTORED AI SUGGESTION BLOCK */}
-        <div className="bg-[#a0c8d2]/10 p-3 rounded-lg border border-[#a0c8d2]/30 flex items-start space-x-2 mt-2">
-          <Lightbulb className="text-[#003040] shrink-0 mt-0.5" size={16} />
-          <div>
-            <span className="block text-xs font-bold text-[#003040] mb-0.5">AI Recommended Action:</span>
-            <p className="text-[11px] text-[#003040]/80 leading-relaxed font-medium">
-              {type === 'complaint' ? SUGGESTED_RESOLUTIONS[form.department] 
-               : type === 'incident' ? SUGGESTED_INCIDENT_ACTIONS[form.department] 
-               : SUGGESTED_COMPLIMENT_ACTIONS[form.department]}
-            </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">{type === 'incident' ? 'Guest Name or Specific Area' : 'Guest Name / Room No.'}</label>
+            <input required value={form.guestName} onChange={e=>setForm({...form, guestName: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="e.g. Room 412 or Lobby Area" />
           </div>
-        </div>
-        
-        {(type === 'complaint' || type === 'incident') && form.reason.trim().length > 2 && (
-          <div className={`p-4 rounded-xl border flex flex-col space-y-2 transition-all duration-300 mt-2 ${SOP_FRAMEWORK[inferredSeverity].color}`}>
-            <div className="flex items-center justify-between border-b pb-1.5 border-black/5">
-              <div className="flex items-center space-x-2">
-                {SOP_FRAMEWORK[inferredSeverity].icon}
-                <span className="font-bold text-xs uppercase tracking-wide">AI Assigned SOP: {SOP_FRAMEWORK[inferredSeverity].label}</span>
-              </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Guest Email</label>
+            <div className="relative">
+               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+               <input type="email" value={form.guestEmail} onChange={e=>setForm({...form, guestEmail: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="guest@email.com" />
             </div>
-            <p className="text-xs leading-relaxed font-semibold opacity-95">Mandate: {SOP_FRAMEWORK[inferredSeverity].authority}</p>
-            <p className="text-[11px] leading-relaxed italic opacity-80">"{SOP_FRAMEWORK[inferredSeverity].steps}"</p>
           </div>
-        )}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Guest Phone</label>
+            <div className="relative">
+               <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+               <input type="tel" value={form.guestPhone} onChange={e=>setForm({...form, guestPhone: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="+1 234..." />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-5 md:p-8 rounded-2xl border border-gray-200 shadow-sm space-y-5">
+        <h3 className="font-bold text-xl text-[#003040] border-b border-gray-100 pb-3 flex items-center">
+          <FileText className="mr-2 text-[#a0c8d2]" size={20} /> Event Documentation
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Department Mentioned</label>
+            <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer">
+              {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Specific Issue / Details</label>
+            <textarea required value={form.reason} onChange={e=>setForm({...form, reason: e.target.value})} rows="2" className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040] resize-none" placeholder={type !== 'compliment' ? "Provide details to auto-classify escalation..." : "What exactly did they love?"} />
+          </div>
+        </div>
+        
+        {/* DESKTOP OPTIMIZED AI CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* AI SUGGESTION BLOCK */}
+            <div className="bg-[#a0c8d2]/10 p-4 rounded-xl border border-[#a0c8d2]/30 flex flex-col space-y-2">
+              <div className="flex items-center space-x-2 pb-2 border-b border-black/5">
+                <Lightbulb className="text-[#003040]" size={18} />
+                <span className="font-bold text-sm text-[#003040]">AI Department Guidance</span>
+              </div>
+              <p className="text-xs md:text-sm text-[#003040]/80 leading-relaxed font-medium">
+                {type === 'complaint' ? SUGGESTED_RESOLUTIONS[form.department] 
+                 : type === 'incident' ? SUGGESTED_INCIDENT_ACTIONS[form.department] 
+                 : SUGGESTED_COMPLIMENT_ACTIONS[form.department]}
+              </p>
+            </div>
+            
+            {/* AUTOMATED SOP PREVIEW PANEL */}
+            {(type === 'complaint' || type === 'incident') && form.reason.trim().length > 2 && (
+              <div className={`p-4 rounded-xl border flex flex-col space-y-2 transition-all duration-300 ${SOP_FRAMEWORK[inferredSeverity].color}`}>
+                <div className="flex items-center space-x-2 border-b pb-2 border-black/5">
+                  {SOP_FRAMEWORK[inferredSeverity].icon}
+                  <span className="font-bold text-sm uppercase tracking-wide">SOP: {SOP_FRAMEWORK[inferredSeverity].label}</span>
+                </div>
+                <p className="text-xs md:text-sm leading-relaxed font-bold opacity-90">{SOP_FRAMEWORK[inferredSeverity].authority}</p>
+                <p className="text-xs md:text-sm leading-relaxed italic opacity-80 mt-1">"{SOP_FRAMEWORK[inferredSeverity].steps}"</p>
+              </div>
+            )}
+        </div>
 
         {type === 'compliment' && (
            <div>
-             <label className="block text-sm font-medium text-gray-700 mb-1">Staff Member Mentioned (Optional)</label>
-             <input value={form.staffMentioned} onChange={e=>setForm({...form, staffMentioned: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040] text-[#003040] font-semibold" placeholder="Who did the guest praise?" />
+             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Staff Member Mentioned (Optional)</label>
+             <div className="relative">
+                <Award className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#cf6231]" size={18} />
+                <input value={form.staffMentioned} onChange={e=>setForm({...form, staffMentioned: e.target.value})} className="w-full border border-[#cf6231]/30 bg-[#cf6231]/5 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#cf6231] text-[#cf6231] font-bold" placeholder="Who did the guest praise?" />
+             </div>
            </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Action Taken</label>
-          <textarea required value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} rows="3" className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="Details..." />
+          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Action Taken</label>
+          <textarea required value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} rows="3" className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="How was it resolved..." />
         </div>
       </div>
 
-      <div className="bg-[#a0c8d2]/10 p-4 rounded-xl border border-[#a0c8d2]/30 shadow-sm">
-        <label className="block text-sm font-medium text-[#003040] mb-1">Logged By (Your Name)</label>
-        <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full border border-[#a0c8d2] rounded-lg p-3 text-sm font-semibold text-[#003040] outline-none focus:ring-2 focus:ring-[#003040] bg-white" placeholder="Jane Doe" />
-      </div>
-
       {(type === 'complaint' || type === 'incident') && (
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
-          <h3 className="font-bold text-gray-800 border-b pb-2">Ticket Resolution</h3>
-          <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white p-5 md:p-8 rounded-2xl border border-gray-200 shadow-sm space-y-5">
+          <h3 className="font-bold text-xl text-[#003040] border-b border-gray-100 pb-3 flex items-center">
+             <Activity className="mr-2 text-[#a0c8d2]" size={20} /> Escalation & Costs
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040] bg-white font-medium">
-                <option value="open">Open</option><option value="resolved">Resolved</option>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Status</label>
+              <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040] bg-white font-bold text-[#8e2a2a] cursor-pointer">
+                <option value="open">Requires Further Action (Open)</option><option value="resolved" className="text-green-700">Resolved & Closed</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cost / Damage</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Total Cost Impact</label>
               <div className="relative w-full">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold"><Coins size={16} /></span>
-                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-300 rounded-lg p-3 pl-9 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold"><Coins size={18} /></span>
+                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-300 rounded-xl p-3 md:p-4 pl-12 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
               </div>
             </div>
           </div>
+          
           {form.status === 'open' && (
-            <div className="space-y-3 pt-2 border-t border-gray-100 animate-in fade-in duration-300">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 pt-4 border-t border-gray-100 animate-in fade-in duration-300">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{inferredSeverity === 'critical' ? 'General Manager Email' : 'Supervisor / HOD Email'}</label>
-                <input type="email" value={form.followUpEmail} onChange={e=>setForm({...form, followUpEmail: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="manager@hotel.com" />
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">{inferredSeverity === 'critical' ? 'GM Email Target' : 'Supervisor / HOD Email Target'}</label>
+                <div className="relative">
+                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                   <input type="email" value={form.followUpEmail} onChange={e=>setForm({...form, followUpEmail: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="manager@hotel.com" />
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{inferredSeverity === 'critical' ? 'GM WhatsApp Number' : 'Handler WhatsApp Number'}</label>
-                <input type="tel" value={form.followUpPhone} onChange={e=>setForm({...form, followUpPhone: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="e.g. +27821234567" />
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">{inferredSeverity === 'critical' ? 'GM WhatsApp Number Target' : 'Handler WhatsApp Number'}</label>
+                <div className="relative">
+                   <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                   <input type="tel" value={form.followUpPhone} onChange={e=>setForm({...form, followUpPhone: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="+27 82 123 4567" />
+                </div>
               </div>
             </div>
           )}
         </div>
       )}
-      <button type="submit" className="w-full bg-[#003040] text-white font-bold py-4 rounded-xl mt-4 hover:bg-[#003040]/90 transition-colors shadow-lg active:scale-95">
-        Submit & Sync to Cloud
-      </button>
+
+      {/* SUBMIT ROW */}
+      <div className="flex flex-col md:flex-row items-center gap-4 pt-4">
+         <div className="w-full md:w-1/3 bg-[#a0c8d2]/10 p-3 md:p-4 rounded-xl border border-[#a0c8d2]/30 shadow-sm">
+            <label className="block text-xs font-bold text-[#003040] mb-1.5 uppercase tracking-wider">Logged By Profile</label>
+            <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full border border-[#a0c8d2] rounded-lg p-2.5 text-sm font-bold text-[#003040] outline-none focus:ring-2 focus:ring-[#003040] bg-white text-center" placeholder="Your Full Name" />
+         </div>
+         <button type="submit" className="w-full md:w-2/3 bg-[#003040] text-white font-bold py-4 md:py-6 rounded-xl text-lg hover:bg-[#003040]/90 transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center">
+            <Database size={24} className="mr-3 text-[#a0c8d2]" /> Push to Cloud Securely
+         </button>
+      </div>
     </form>
   );
 }
@@ -774,143 +861,159 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
   };
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex flex-wrap bg-gray-200 rounded-lg p-1 mb-4 shadow-inner gap-1">
+    <div className="p-4 md:p-8 space-y-4 md:space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+      
+      {/* DESKTOP CENTRIC FILTER BAR */}
+      <div className="flex flex-wrap bg-white rounded-xl p-2 md:p-3 shadow-sm border border-gray-200 gap-2 w-full">
         {['all', 'open', 'resolved', 'complaint', 'incident', 'compliment'].map(f => (
-          <button key={f} onClick={() => setFilter(f)} className={`flex-1 min-w-[30%] py-1.5 text-xs font-bold rounded-md capitalize transition-all ${filter === f ? 'bg-white shadow text-[#003040]' : 'text-gray-500'}`}>{f}</button>
+          <button key={f} onClick={() => setFilter(f)} className={`flex-1 min-w-[30%] md:min-w-[120px] py-2 md:py-2.5 text-xs md:text-sm font-bold rounded-lg capitalize transition-all ${filter === f ? 'bg-[#003040] shadow-md text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{f}</button>
         ))}
       </div>
 
       {entries.length === 0 || filtered.length === 0 ? (
-         <div className="p-8 text-center text-gray-500 flex flex-col items-center h-full justify-center"><List size={48} className="mb-4 text-gray-300" /><p>No records found...</p></div>
+         <div className="p-12 md:p-24 bg-white rounded-2xl border border-gray-200 text-center text-gray-400 flex flex-col items-center h-full justify-center shadow-sm">
+            <List size={64} className="mb-4 text-gray-200" />
+            <p className="text-lg font-medium">No records found for this filter.</p>
+         </div>
       ) : (
-        filtered.map(entry => {
-          const localDisplayCost = (Number(entry.cost) || 0) * displayConversionFactor;
-          const sla = getSLADetails(entry);
-          const activeSeverity = entry.severity || 'quick';
+        /* MASONRY GRID LAYOUT FOR DESKTOP */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          {filtered.map(entry => {
+            const localDisplayCost = (Number(entry.cost) || 0) * displayConversionFactor;
+            const sla = getSLADetails(entry);
+            const activeSeverity = entry.severity || 'quick';
 
-          const leftBorderColor = sla.isBreached 
-            ? '#8e2a2a' 
-            : (entry.type === 'incident'
-                ? '#003040'
-                : entry.type === 'compliment' 
-                  ? '#595733' 
-                  : activeSeverity === 'critical' 
-                    ? '#8e2a2a' 
-                    : activeSeverity === 'intermediate' 
-                      ? '#cf6231' 
-                      : '#595733');
+            const leftBorderColor = sla.isBreached 
+              ? '#8e2a2a' 
+              : (entry.type === 'incident'
+                  ? '#003040'
+                  : entry.type === 'compliment' 
+                    ? '#595733' 
+                    : activeSeverity === 'critical' 
+                      ? '#8e2a2a' 
+                      : activeSeverity === 'intermediate' 
+                        ? '#cf6231' 
+                        : '#595733');
 
-          return (
-            <div 
-              key={entry.id} 
-              className={`bg-white p-4 rounded-xl shadow-sm border border-l-4 transition-all duration-300 ${
-                sla.isBreached ? 'border-[#8e2a2a] bg-[#8e2a2a]/5' : 'border-gray-200'
-              }`} 
-              style={{ borderLeftColor: leftBorderColor }}
-            >
-              {sla.isBreached && (
-                <div className="mb-3 -mx-4 -mt-4 bg-[#8e2a2a] text-white font-bold uppercase text-[10px] tracking-wider p-2 flex items-center justify-center space-x-2 animate-pulse rounded-t-xl">
-                  <Clock size={12} />
-                  <span>⚠️ SLA BREACHED: Overdue by {sla.hours}h {sla.minutes}m</span>
-                </div>
-              )}
-
-              <div className="flex justify-between items-start mb-2 mt-1">
-                <div className="flex items-center space-x-2">
-                  {entry.type === 'compliment' && <ThumbsUp className="text-[#595733]" size={18} />}
-                  {entry.type === 'complaint' && <ThumbsDown className="text-[#8e2a2a]" size={18} />}
-                  {entry.type === 'incident' && <AlertTriangle className="text-[#003040]" size={18} />}
-                  
-                  {(entry.type === 'complaint' || entry.type === 'incident') && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${SOP_FRAMEWORK[activeSeverity].badge}`}>
-                      {SOP_FRAMEWORK[activeSeverity].label}
-                    </span>
-                  )}
-                  
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${entry.sentiment?.color || 'bg-gray-50 text-gray-400'}`}>{entry.sentiment?.label || 'Neutral'}</span>
-                </div>
-                <span className="text-xs text-gray-400 flex items-center"><Calendar size={12} className="mr-1" /> {new Date(entry.date).toLocaleDateString()}</span>
-              </div>
-              
-              <h3 className="font-semibold text-gray-800 text-lg">{entry.guestName}</h3>
-              <p className="text-sm font-bold text-gray-600 mt-1 leading-snug">{entry.reason}</p>
-              
-              <div className="grid grid-cols-2 gap-y-2 mt-3 text-sm text-gray-500">
-                <div>Department: <span className="font-semibold text-gray-800">{entry.department}</span></div>
-                <div>Logged By: <span className="font-semibold text-gray-800">{entry.handledBy}</span></div>
-                {(entry.type === 'complaint' || entry.type === 'incident') && <div className="col-span-2 flex items-center">Resolution Cost: <span className="font-semibold text-[#8e2a2a] flex items-center ml-1"><Coins size={14} className="mr-1" /> {localDisplayCost.toFixed(2)}</span></div>}
-                {entry.type === 'compliment' && entry.staffMentioned && <div className="col-span-2 text-[#cf6231] font-semibold flex items-center"><Award size={14} className="mr-1" /> Recognized: {entry.staffMentioned}</div>}
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <span className="text-gray-500 block text-xs mb-1">Action Taken</span>
-                <p className="text-gray-700 text-sm leading-relaxed italic">"{entry.actionTaken}"</p>
-              </div>
-              
-              {/* Team Notes Section */}
-              <div className="mt-4 bg-gray-50 rounded-xl p-3 border border-gray-200">
-                <h4 className="text-xs font-bold text-gray-600 mb-2 flex items-center"><MessageSquare size={12} className="mr-1" /> Shared Team Notes</h4>
-                <div className="space-y-2 mb-2 max-h-32 overflow-y-auto">
-                  {entry.comments?.map((c, i) => (
-                    <div key={i} className="bg-white p-2 rounded border border-gray-100 text-xs">
-                      <span className="font-bold text-[#003040]">{c.author}:</span> {c.text}
+            return (
+              <div 
+                key={entry.id} 
+                className={`bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-l-8 transition-all duration-300 flex flex-col h-full ${
+                  sla.isBreached ? 'border-[#8e2a2a] bg-[#8e2a2a]/5 hover:shadow-md' : 'border-gray-200 hover:shadow-md'
+                }`} 
+                style={{ borderLeftColor: leftBorderColor }}
+              >
+                {/* HEADER INFO */}
+                <div>
+                  {sla.isBreached && (
+                    <div className="mb-4 -mx-5 md:-mx-6 -mt-5 md:-mt-6 bg-[#8e2a2a] text-white font-bold uppercase text-[10px] md:text-xs tracking-wider p-2.5 flex items-center justify-center space-x-2 animate-pulse rounded-t-xl shadow-sm">
+                      <Clock size={14} />
+                      <span>⚠️ SLA BREACHED: Overdue {sla.hours}h {sla.minutes}m</span>
                     </div>
-                  ))}
-                </div>
-                <div className="flex space-x-2 mt-2">
-                  <input value={commentInput[entry.id]?.author || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], author: e.target.value}})} placeholder="Name" className="w-1/4 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
-                  <input value={commentInput[entry.id]?.text || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text: e.target.value}})} placeholder="Add internal note..." className="flex-1 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
-                  <button onClick={()=>{ if(!commentInput[entry.id]?.text) return; onAddComment(entry.id, commentInput[entry.id].text, commentInput[entry.id].author || "Staff"); setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text:''}}); }} className="bg-[#003040] text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm active:scale-95">Post</button>
-                </div>
-              </div>
-              
-              {/* Operational Escalation Actions Trigger Maps */}
-              <div className="mt-4 flex flex-col space-y-2">
-                {sla.isBreached && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
-                    <p className="text-xs font-bold text-[#8e2a2a] uppercase text-center">Urgent Escalation Center</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => handleWhatsAppEscalation(entry)} className={`py-2 px-1 text-xs font-semibold rounded-lg border flex items-center justify-center shadow-sm ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
-                        <MessageSquare size={14} className="mr-1" /> {entry.escalationSent ? "Escalated" : "WhatsApp Group"}
-                      </button>
-                      {entry.followUpEmail && (
-                        <button onClick={() => handleSendEmail(entry, 'escalation')} className={`py-2 px-1 text-xs font-semibold rounded-lg border flex items-center justify-center shadow-sm ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
-                          <Mail size={14} className="mr-1" /> Email Handler
-                        </button>
+                  )}
+
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+                      {entry.type === 'compliment' && <ThumbsUp className="text-[#595733] shrink-0" size={20} />}
+                      {entry.type === 'complaint' && <ThumbsDown className="text-[#8e2a2a] shrink-0" size={20} />}
+                      {entry.type === 'incident' && <AlertTriangle className="text-[#003040] shrink-0" size={20} />}
+                      
+                      {(entry.type === 'complaint' || entry.type === 'incident') && (
+                        <span className={`text-[10px] md:text-xs px-2.5 py-1 rounded-full font-bold border whitespace-nowrap ${SOP_FRAMEWORK[activeSeverity].badge}`}>
+                          {SOP_FRAMEWORK[activeSeverity].label}
+                        </span>
                       )}
+                      
+                      <span className={`text-[10px] md:text-xs px-2.5 py-1 rounded-full font-bold border whitespace-nowrap ${entry.sentiment?.color || 'bg-gray-50 text-gray-400'}`}>{entry.sentiment?.label || 'Neutral'}</span>
                     </div>
                   </div>
-                )}
+                  
+                  <h3 className="font-bold text-gray-900 text-lg md:text-xl line-clamp-1">{entry.guestName}</h3>
+                  <p className="text-sm md:text-base font-semibold text-gray-600 mt-1 line-clamp-2">{entry.reason}</p>
+                  
+                  <div className="grid grid-cols-2 gap-y-3 mt-4 text-xs md:text-sm text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    <div><span className="block text-[9px] uppercase tracking-widest font-bold mb-0.5">Dept</span><span className="font-bold text-gray-800 truncate">{entry.department}</span></div>
+                    <div><span className="block text-[9px] uppercase tracking-widest font-bold mb-0.5">Logged By</span><span className="font-bold text-gray-800 truncate">{entry.handledBy}</span></div>
+                    <div className="col-span-2 flex justify-between items-center pt-2 border-t border-gray-200">
+                       <span className="text-[10px] text-gray-400 font-bold flex items-center"><Calendar size={12} className="mr-1.5" /> {new Date(entry.date).toLocaleDateString()}</span>
+                       {(entry.type === 'complaint' || entry.type === 'incident') && <span className="font-bold text-[#8e2a2a] flex items-center bg-white px-2 py-0.5 rounded shadow-sm border border-red-100"><Coins size={12} className="mr-1.5" /> {localDisplayCost.toFixed(2)}</span>}
+                    </div>
+                    {entry.type === 'compliment' && entry.staffMentioned && <div className="col-span-2 text-[#cf6231] font-bold flex items-center pt-2 border-t border-gray-200"><Award size={14} className="mr-1.5" /> Recognized: {entry.staffMentioned}</div>}
+                  </div>
 
-                {entry.guestEmail && (
-                  <button onClick={() => handleSendEmail(entry, 'guest')} className={`w-full font-semibold py-2 rounded-lg border transition-colors text-sm flex items-center justify-center shadow-sm ${entry.guestEmailSent ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'}`}>
-                    {entry.guestEmailSent ? <CheckCircle size={14} className="mr-2" /> : <Mail size={14} className="mr-2 text-gray-400" />} {entry.guestEmailSent ? 'GUEST NOTIFIED' : 'Email Guest'}
-                  </button>
-                )}
-                
-                {entry.status === 'open' && (
-                  <>
-                    {entry.followUpEmail && !sla.isBreached && (
-                      <button onClick={() => handleSendEmail(entry, 'manager')} className={`w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center shadow-sm transition-colors ${entry.managerEmailSent ? 'bg-green-600 text-white' : 'bg-[#003040] text-white'}`}>
-                        {entry.managerEmailSent ? <CheckCircle size={14} className="mr-2" /> : <AlertCircle size={14} className="mr-2" />} 
-                        {entry.managerEmailSent ? (activeSeverity === 'critical' ? 'GM NOTIFIED' : 'HOD ALERTED') : (activeSeverity === 'critical' ? 'Escalate to GM Now' : 'Alert Supervisor / HOD')}
+                  <div className="mt-4">
+                    <span className="text-gray-400 font-bold uppercase tracking-widest block text-[9px] mb-1.5">Action Taken</span>
+                    <p className="text-gray-700 text-sm leading-relaxed italic line-clamp-3">"{entry.actionTaken}"</p>
+                  </div>
+                </div>
+
+                {/* BOTTOM HALF PINNED */}
+                <div className="mt-auto pt-5 border-t border-gray-100 space-y-4">
+                  {/* Team Notes Section */}
+                  <div className="bg-[#f6ebda]/30 rounded-xl p-3 border border-[#a0c8d2]/30">
+                    <h4 className="text-xs font-bold text-[#003040] mb-2 flex items-center"><MessageSquare size={14} className="mr-1.5" /> Internal Notes</h4>
+                    <div className="space-y-2 mb-3 max-h-24 overflow-y-auto pr-1">
+                      {entry.comments?.map((c, i) => (
+                        <div key={i} className="bg-white p-2 rounded-lg border border-gray-200 text-xs shadow-sm">
+                          <span className="font-bold text-[#cf6231]">{c.author}:</span> <span className="text-gray-700">{c.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex space-x-2">
+                      <input value={commentInput[entry.id]?.author || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], author: e.target.value}})} placeholder="Name" className="w-1/3 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
+                      <input value={commentInput[entry.id]?.text || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text: e.target.value}})} placeholder="Note..." className="flex-1 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
+                      <button onClick={()=>{ if(!commentInput[entry.id]?.text) return; onAddComment(entry.id, commentInput[entry.id].text, commentInput[entry.id].author || "Staff"); setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text:''}}); }} className="bg-[#003040] hover:bg-[#003040]/90 transition-colors text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm active:scale-95">Post</button>
+                    </div>
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex flex-col space-y-2.5">
+                    {sla.isBreached && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
+                        <p className="text-[10px] font-bold text-[#8e2a2a] uppercase tracking-widest text-center">Urgent Escalation</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button onClick={() => handleWhatsAppEscalation(entry)} className={`py-2 px-1 text-[10px] md:text-xs font-bold rounded-lg border flex items-center justify-center shadow-sm transition-all ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-100'}`}>
+                            <MessageSquare size={14} className="mr-1.5" /> {entry.escalationSent ? "Escalated" : "WhatsApp"}
+                          </button>
+                          {entry.followUpEmail && (
+                            <button onClick={() => handleSendEmail(entry, 'escalation')} className={`py-2 px-1 text-[10px] md:text-xs font-bold rounded-lg border flex items-center justify-center shadow-sm transition-all ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-100'}`}>
+                              <Mail size={14} className="mr-1.5" /> Email
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {entry.guestEmail && (
+                      <button onClick={() => handleSendEmail(entry, 'guest')} className={`w-full font-bold py-2.5 rounded-xl border transition-all text-xs md:text-sm flex items-center justify-center shadow-sm active:scale-[0.98] ${entry.guestEmailSent ? 'bg-[#595733]/10 border-[#595733]/30 text-[#595733]' : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'}`}>
+                        {entry.guestEmailSent ? <CheckCircle size={16} className="mr-2" /> : <Mail size={16} className="mr-2 text-gray-400" />} {entry.guestEmailSent ? 'GUEST NOTIFIED' : 'Email Guest'}
                       </button>
                     )}
                     
-                    {activeSeverity === 'critical' && !sla.isBreached && (
-                      <button onClick={() => handleWhatsAppEscalation(entry)} className="w-full bg-[#595733] hover:bg-[#595733]/90 text-white font-semibold py-3 rounded-lg text-sm flex items-center justify-center shadow-sm">
-                        <MessageSquare size={14} className="mr-2" /> WhatsApp GM Direct Link
-                      </button>
-                    )}
+                    {entry.status === 'open' && (
+                      <>
+                        {entry.followUpEmail && !sla.isBreached && (
+                          <button onClick={() => handleSendEmail(entry, 'manager')} className={`w-full py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center shadow-sm transition-all active:scale-[0.98] ${entry.managerEmailSent ? 'bg-green-600 text-white' : 'bg-[#003040] text-white hover:bg-[#003040]/90'}`}>
+                            {entry.managerEmailSent ? <CheckCircle size={16} className="mr-2" /> : <AlertCircle size={16} className="mr-2" />} 
+                            {entry.managerEmailSent ? (activeSeverity === 'critical' ? 'GM NOTIFIED' : 'HOD ALERTED') : (activeSeverity === 'critical' ? 'Escalate to GM' : 'Alert HOD')}
+                          </button>
+                        )}
+                        
+                        {activeSeverity === 'critical' && !sla.isBreached && (
+                          <button onClick={() => handleWhatsAppEscalation(entry)} className="w-full bg-[#595733] hover:bg-[#595733]/90 text-white font-bold py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center shadow-sm active:scale-[0.98] transition-all">
+                            <MessageSquare size={16} className="mr-2" /> WhatsApp GM Link
+                          </button>
+                        )}
 
-                    <button onClick={() => onResolve(entry.id)} className="w-full bg-amber-500 text-white py-3 rounded-lg text-sm font-semibold shadow-md mt-2">Close Ticket</button>
-                  </>
-                )}
+                        <button onClick={() => onResolve(entry.id)} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl text-sm font-bold shadow-md mt-2 transition-all active:scale-[0.98]">Close Ticket</button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          );
-        })
+            );
+          })}
+        </div>
       )}
     </div>
   );
