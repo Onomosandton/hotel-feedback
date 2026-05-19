@@ -1,11 +1,11 @@
-
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Home, 
   PlusCircle, 
   List, 
   ThumbsUp, 
   ThumbsDown, 
-  DollarSign, 
+  Coins, 
   Award, 
   Building2, 
   Calendar,
@@ -63,7 +63,7 @@ const CURRENCY_MAP = {
   '$': 'USD', '€': 'EUR', '£': 'GBP', 'R': 'ZAR'
 };
 
-// --- SOP ESCALATION DIRECTIVES (ALIGNED TO ONOMO CORPORATE PANTONES) ---
+// --- SOP ESCALATION DIRECTIVES (ONOMO PANTONES) ---
 const SOP_FRAMEWORK = {
   quick: {
     label: 'Quick Resolve',
@@ -91,7 +91,6 @@ const SOP_FRAMEWORK = {
   }
 };
 
-// --- DYNAMIC AI CLASSIFICATION ENGINES ---
 const determineSOPSeverity = (text) => {
   const lower = (text || "").toLowerCase();
   if (/(fire|flood|injury|theft|vip|gm|general manager|emergency|medical|danger|police|assault|broken lock|power out|no water|furious|unacceptable|terrible|worst|shouting|legal)/.test(lower)) {
@@ -188,6 +187,7 @@ export default function App() {
       const entriesRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries');
       await addDoc(entriesRef, { ...newEntry, userId: user.uid });
       setActiveTab('history'); 
+      setHistoryFilter('all');
       showToast('Entry saved securely to cloud!');
     } catch (error) {
       showToast(`Save failed: ${error.message}`);
@@ -265,7 +265,7 @@ export default function App() {
       )}
 
       <main className="flex-1 overflow-y-auto pb-32 relative">
-        {activeTab === 'dashboard' && <Dashboard entries={entries} currency={currency} exchangeRates={exchangeRates} onOpenTicketsClick={() => { setHistoryFilter('open'); setActiveTab('history'); }} />}
+        {activeTab === 'dashboard' && <Dashboard entries={entries} currency={currency} exchangeRates={exchangeRates} onOpenTicketsClick={() => { setHistoryFilter('open'); setActiveTab('history'); }} onStatClick={(filter) => { setHistoryFilter(filter); setActiveTab('history'); }} />}
         {activeTab === 'add' && <AddEntryForm onSave={addEntry} currency={currency} exchangeRates={exchangeRates} />}
         {activeTab === 'history' && <History entries={entries} onResolve={resolveEntry} onAddComment={addComment} onMarkEmailSent={markEmailSent} currency={currency} exchangeRates={exchangeRates} filter={historyFilter} setFilter={setHistoryFilter} ticker={timeTicker} />}
       </main>
@@ -290,8 +290,9 @@ export default function App() {
 
 // --- COMPONENTS ---
 
-function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick }) {
+function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onStatClick }) {
   const [range, setRange] = useState('30');
+  
   const filtered = useMemo(() => {
     if (range === 'all') return entries;
     const cutoff = new Date();
@@ -330,26 +331,71 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick }) {
     return { comps, complaints, cost, open };
   }, [filtered, currency, exchangeRates]);
 
+  const trendData = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push({
+        date: d.toDateString(),
+        label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        complaints: 0,
+        compliments: 0
+      });
+    }
+
+    filtered.forEach(e => {
+      const eDate = new Date(e.date).toDateString();
+      const dayMatch = days.find(d => d.date === eDate);
+      if (dayMatch) {
+        if (e.type === 'complaint') dayMatch.complaints++;
+        if (e.type === 'compliment') dayMatch.compliments++;
+      }
+    });
+
+    const maxVal = Math.max(...days.map(d => Math.max(d.complaints, d.compliments, 1)));
+    return { days, maxVal };
+  }, [filtered]);
+
+  const exportCSV = () => {
+    const headers = ['Type', 'Date', 'Guest Name', 'Guest Email', 'Guest Phone', 'Department', 'Severity', 'Reason', 'Action', 'Base Cost (USD)', 'Status', 'Handled By', 'Sentiment'];
+    const rows = filtered.map(e => {
+      const sentimentStr = e.sentiment ? e.sentiment.label : 'N/A';
+      const safeReason = e.reason ? String(e.reason).replace(/"/g, '""') : '';
+      const safeAction = e.actionTaken ? String(e.actionTaken).replace(/"/g, '""') : '';
+      return `"${e.type}","${new Date(e.date).toLocaleDateString()}","${e.guestName}","${e.guestEmail || ''}","${e.guestPhone || ''}","${e.department}","${e.severity || 'quick'}","${safeReason}","${safeAction}","${e.cost || 0}","${e.status || 'resolved'}","${e.handledBy || ''}","${sentimentStr}"`;
+    });
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `onomo_feedback_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-4 space-y-4 animate-in fade-in duration-500">
       <div className="flex justify-between items-center mb-2">
         <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-white border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-[#003040] focus:border-[#003040] block p-2 font-medium shadow-sm">
           <option value="1">Today</option><option value="7">Last 7 Days</option><option value="30">Last 30 Days</option><option value="all">All Time</option>
         </select>
-        <span className="text-sm font-semibold text-gray-400">Live Insights</span>
+        <button onClick={exportCSV} className="flex items-center text-xs bg-[#003040] text-white px-3 py-2 rounded-lg font-semibold hover:bg-[#003040]/90 transition-colors shadow-sm">
+          <Download size={14} className="mr-1.5" /> Export CSV
+        </button>
       </div>
       
       <div className="grid grid-cols-2 gap-4">
-        <StatBox label="Compliments" value={stats.comps} color="text-green-700 bg-green-50 border-green-100" />
-        <StatBox label="Complaints" value={stats.complaints} color="text-[#8e2a2a] bg-[#8e2a2a]/5 border-[#8e2a2a]/10" />
+        <StatBox label="Compliments" value={stats.comps} color="text-green-700 bg-green-50 border-green-100 hover:bg-green-100 cursor-pointer transition-colors" onClick={() => onStatClick('compliment')} />
+        <StatBox label="Complaints" value={stats.complaints} color="text-[#8e2a2a] bg-[#8e2a2a]/5 border-[#8e2a2a]/10 hover:bg-[#8e2a2a]/10 cursor-pointer transition-colors" onClick={() => onStatClick('complaint')} />
       </div>
       
       <div className="grid grid-cols-2 gap-4">
         <MetricCard label="Open Issues" value={stats.open} color="bg-red-50 border-red-100 text-[#8e2a2a]" onClick={onOpenTicketsClick} icon={<AlertCircle size={16} />} />
-        <MetricCard label="Total Cost" value={`${currency}${stats.cost.toFixed(2)}`} color="bg-white border-gray-200 text-gray-800" icon={<DollarSign size={16} />} />
+        <MetricCard label="Total Cost" value={`${currency}${stats.cost.toFixed(2)}`} color="bg-white border-gray-200 text-gray-800" icon={<Coins size={16} />} />
       </div>
 
-      {/* AMBER & PURPLE RECOGNITION LEADERBOARD */}
       <h2 className="text-lg font-semibold text-gray-700 mt-6 mb-2 flex items-center">
         <Trophy size={18} className="mr-2 text-[#ffb131]" /> Staff Performance Board
       </h2>
@@ -374,13 +420,28 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick }) {
           <p className="text-center text-gray-400 italic text-sm py-2">No staff mentions captured yet.</p>
         )}
       </div>
+
+      <h2 className="text-lg font-semibold text-gray-700 mt-6 mb-2 flex items-center">
+        <Activity size={18} className="mr-2 text-[#a0c8d2]" /> 7-Day Trend
+      </h2>
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 h-48 flex items-end justify-between space-x-1 pb-6 pt-8 relative shadow-sm">
+        {trendData.days.map((day, i) => (
+          <div key={i} className="flex flex-col items-center flex-1 group">
+            <div className="flex w-full justify-center items-end space-x-0.5 h-24">
+              <div className="w-1/2 bg-[#595733] rounded-t-sm transition-all" style={{ height: `${(day.compliments / trendData.maxVal) * 100}%` }}></div>
+              <div className="w-1/2 bg-[#8e2a2a] rounded-t-sm transition-all" style={{ height: `${(day.complaints / trendData.maxVal) * 100}%` }}></div>
+            </div>
+            <span className="text-[10px] text-gray-400 mt-2 rotate-45 transform origin-left">{day.label}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function StatBox({ label, value, color }) {
+function StatBox({ label, value, color, onClick }) {
   return (
-    <div className={`${color} p-4 rounded-2xl border shadow-sm flex flex-col items-center justify-center`}>
+    <div onClick={onClick} className={`${color} p-4 rounded-2xl border shadow-sm flex flex-col items-center justify-center ${onClick ? 'active:scale-95' : ''}`}>
       <span className="text-3xl font-bold leading-none">{value}</span>
       <span className="text-sm font-medium text-center mt-1 opacity-80">{label}</span>
     </div>
@@ -439,12 +500,19 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
     }
 
     onSave(finalizedEntry, whatsappCallback);
+    
+    // Clear form after sync
+    setForm({ 
+      guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', 
+      handledBy: '', actionTaken: '', cost: '', status: 'resolved',
+      followUpEmail: '', followUpPhone: '', guestEmailSent: false, managerEmailSent: false, escalationSent: false, staffMentioned: ''
+    });
   };
 
   return (
     <form onSubmit={submit} className="p-4 space-y-4 font-sans">
       <div className="flex bg-gray-200 rounded-lg p-1 mb-6">
-        <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'compliment' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>Compliment</button>
+        <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'compliment' ? 'bg-white shadow text-[#595733]' : 'text-gray-500'}`}>Compliment</button>
         <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'complaint' ? 'bg-white shadow text-[#8e2a2a]' : 'text-gray-500'}`}>Complaint</button>
       </div>
 
@@ -522,10 +590,10 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cost ({currency})</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
               <div className="relative w-full">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">{currency}</span>
-                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-300 rounded-lg p-3 pl-8 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold"><Coins size={16} /></span>
+                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-300 rounded-lg p-3 pl-9 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
               </div>
             </div>
           </div>
@@ -552,7 +620,16 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
 
 function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, exchangeRates, filter, setFilter, ticker }) {
   const [commentInput, setCommentInput] = useState({});
-  const filtered = entries.filter(e => filter === 'all' ? true : e.status === filter);
+  
+  const filtered = entries.filter(e => {
+    if (filter === 'all') return true;
+    if (filter === 'open') return e.status === 'open';
+    if (filter === 'resolved') return e.status === 'resolved';
+    if (filter === 'compliment') return e.type === 'compliment';
+    if (filter === 'complaint') return e.type === 'complaint';
+    return true;
+  });
+  
   const currentISO = CURRENCY_MAP[currency] || 'USD';
   const displayConversionFactor = exchangeRates[currentISO] || 1;
 
@@ -606,139 +683,141 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     onMarkEmailSent(entry.id, 'escalation');
   };
 
-  if (entries.length === 0) return <div className="p-8 text-center text-gray-500 flex flex-col items-center h-full justify-center"><List size={48} className="mb-4 text-gray-300" /><p>No records found...</p></div>;
-
   return (
     <div className="p-4 space-y-4">
-      <div className="flex bg-gray-200 rounded-lg p-1 mb-4 shadow-inner">
-        {['all', 'open', 'resolved'].map(f => (
-          <button key={f} onClick={() => setFilter(f)} className={`flex-1 py-1.5 text-xs font-bold rounded-md capitalize transition-all ${filter === f ? 'bg-white shadow text-[#003040]' : 'text-gray-500'}`}>{f}</button>
+      <div className="flex flex-wrap bg-gray-200 rounded-lg p-1 mb-4 shadow-inner gap-1">
+        {['all', 'open', 'resolved', 'complaint', 'compliment'].map(f => (
+          <button key={f} onClick={() => setFilter(f)} className={`flex-1 min-w-[30%] py-1.5 text-xs font-bold rounded-md capitalize transition-all ${filter === f ? 'bg-white shadow text-[#003040]' : 'text-gray-500'}`}>{f}</button>
         ))}
       </div>
-      {filtered.map(entry => {
-        const localDisplayCost = (Number(entry.cost) || 0) * displayConversionFactor;
-        const sla = getSLADetails(entry);
-        const activeSeverity = entry.severity || 'quick';
 
-        // Direct border evaluation matrix maps to Onomo specific pantone tiers
-        const leftBorderColor = sla.isBreached 
-          ? '#8e2a2a' 
-          : (entry.type === 'compliment' 
-              ? '#595733' 
-              : activeSeverity === 'critical' 
-                ? '#8e2a2a' 
-                : activeSeverity === 'intermediate' 
-                  ? '#cf6231' 
-                  : '#595733');
+      {entries.length === 0 || filtered.length === 0 ? (
+         <div className="p-8 text-center text-gray-500 flex flex-col items-center h-full justify-center"><List size={48} className="mb-4 text-gray-300" /><p>No records found...</p></div>
+      ) : (
+        filtered.map(entry => {
+          const localDisplayCost = (Number(entry.cost) || 0) * displayConversionFactor;
+          const sla = getSLADetails(entry);
+          const activeSeverity = entry.severity || 'quick';
 
-        return (
-          <div 
-            key={entry.id} 
-            className={`bg-white p-4 rounded-xl shadow-sm border border-l-4 transition-all duration-300 ${
-              sla.isBreached ? 'border-[#8e2a2a] bg-[#8e2a2a]/5' : 'border-gray-200'
-            }`} 
-            style={{ borderLeftColor: leftBorderColor }}
-          >
-            {sla.isBreached && (
-              <div className="mb-3 -mx-4 -mt-4 bg-[#8e2a2a] text-white font-bold uppercase text-[10px] tracking-wider p-2 flex items-center justify-center space-x-2 animate-pulse rounded-t-xl">
-                <Clock size={12} />
-                <span>⚠️ SLA BREACHED: Overdue by {sla.hours}h {sla.minutes}m</span>
-              </div>
-            )}
+          const leftBorderColor = sla.isBreached 
+            ? '#8e2a2a' 
+            : (entry.type === 'compliment' 
+                ? '#595733' 
+                : activeSeverity === 'critical' 
+                  ? '#8e2a2a' 
+                  : activeSeverity === 'intermediate' 
+                    ? '#cf6231' 
+                    : '#595733');
 
-            <div className="flex justify-between items-start mb-2 mt-1">
-              <div className="flex items-center space-x-2">
-                {entry.type === 'compliment' ? <ThumbsUp className="text-[#595733]" size={18} /> : <ThumbsDown className="text-[#8e2a2a]" size={18} />}
-                
-                {entry.type === 'complaint' && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${SOP_FRAMEWORK[activeSeverity].badge}`}>
-                     {SOP_FRAMEWORK[activeSeverity].label}
-                  </span>
-                )}
-                
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${entry.sentiment?.color || 'bg-gray-50 text-gray-400'}`}>{entry.sentiment?.label || 'Neutral'}</span>
-              </div>
-              <span className="text-xs text-gray-400 flex items-center"><Calendar size={12} className="mr-1" /> {new Date(entry.date).toLocaleDateString()}</span>
-            </div>
-            
-            <h3 className="font-semibold text-gray-800 text-lg">{entry.guestName}</h3>
-            <p className="text-sm font-bold text-gray-600 mt-1 leading-snug">{entry.reason}</p>
-            
-            <div className="grid grid-cols-2 gap-y-2 mt-3 text-sm text-gray-500">
-              <div>Department: <span className="font-semibold text-gray-800">{entry.department}</span></div>
-              <div>Logged By: <span className="font-semibold text-gray-800">{entry.handledBy}</span></div>
-              {entry.type === 'complaint' && <div>Resolution Cost: <span className="font-semibold text-[#8e2a2a]">{currency}{localDisplayCost.toFixed(2)}</span></div>}
-              {entry.type === 'compliment' && entry.staffMentioned && <div className="col-span-2 text-[#cf6231] font-semibold flex items-center"><Award size={14} className="mr-1" /> Recognized: {entry.staffMentioned}</div>}
-            </div>
-
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <span className="text-gray-500 block text-xs mb-1">Action Taken</span>
-              <p className="text-gray-700 text-sm leading-relaxed italic">"{entry.actionTaken}"</p>
-            </div>
-            
-            {/* Team Notes Section */}
-            <div className="mt-4 bg-gray-50 rounded-xl p-3 border border-gray-200">
-              <h4 className="text-xs font-bold text-gray-600 mb-2 flex items-center"><MessageSquare size={12} className="mr-1" /> Shared Team Notes</h4>
-              <div className="space-y-2 mb-2 max-h-32 overflow-y-auto">
-                {entry.comments?.map((c, i) => (
-                  <div key={i} className="bg-white p-2 rounded border border-gray-100 text-xs">
-                    <span className="font-bold text-[#003040]">{c.author}:</span> {c.text}
-                  </div>
-                ))}
-              </div>
-              <div className="flex space-x-2 mt-2">
-                <input value={commentInput[entry.id]?.author || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], author: e.target.value}})} placeholder="Name" className="w-1/4 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
-                <input value={commentInput[entry.id]?.text || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text: e.target.value}})} placeholder="Add internal note..." className="flex-1 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
-                <button onClick={()=>{ if(!commentInput[entry.id]?.text) return; onAddComment(entry.id, commentInput[entry.id].text, commentInput[entry.id].author || "Staff"); setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text:''}}); }} className="bg-[#003040] text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm active:scale-95">Post</button>
-              </div>
-            </div>
-            
-            {/* Operational Escalation Actions Trigger Maps */}
-            <div className="mt-4 flex flex-col space-y-2">
+          return (
+            <div 
+              key={entry.id} 
+              className={`bg-white p-4 rounded-xl shadow-sm border border-l-4 transition-all duration-300 ${
+                sla.isBreached ? 'border-[#8e2a2a] bg-[#8e2a2a]/5' : 'border-gray-200'
+              }`} 
+              style={{ borderLeftColor: leftBorderColor }}
+            >
               {sla.isBreached && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
-                  <p className="text-xs font-bold text-[#8e2a2a] uppercase text-center">Urgent Escalation Center</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => handleWhatsAppEscalation(entry)} className={`py-2 px-1 text-xs font-semibold rounded-lg border flex items-center justify-center shadow-sm ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
-                      <MessageSquare size={14} className="mr-1" /> {entry.escalationSent ? "Escalated" : "WhatsApp Group"}
-                    </button>
-                    {entry.followUpEmail && (
-                      <button onClick={() => handleSendEmail(entry, 'escalation')} className={`py-2 px-1 text-xs font-semibold rounded-lg border flex items-center justify-center shadow-sm ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
-                        <Mail size={14} className="mr-1" /> Email Handler
-                      </button>
-                    )}
-                  </div>
+                <div className="mb-3 -mx-4 -mt-4 bg-[#8e2a2a] text-white font-bold uppercase text-[10px] tracking-wider p-2 flex items-center justify-center space-x-2 animate-pulse rounded-t-xl">
+                  <Clock size={12} />
+                  <span>⚠️ SLA BREACHED: Overdue by {sla.hours}h {sla.minutes}m</span>
                 </div>
               )}
 
-              {entry.guestEmail && (
-                <button onClick={() => handleSendEmail(entry, 'guest')} className={`w-full font-semibold py-2 rounded-lg border transition-colors text-sm flex items-center justify-center shadow-sm ${entry.guestEmailSent ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'}`}>
-                  {entry.guestEmailSent ? <CheckCircle size={14} className="mr-2" /> : <Mail size={14} className="mr-2 text-gray-400" />} {entry.guestEmailSent ? 'GUEST NOTIFIED' : 'Email Guest'}
-                </button>
-              )}
-              
-              {entry.status === 'open' && (
-                <>
-                  {entry.followUpEmail && !sla.isBreached && (
-                    <button onClick={() => handleSendEmail(entry, 'manager')} className={`w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center shadow-sm transition-colors ${entry.managerEmailSent ? 'bg-green-600 text-white' : 'bg-[#003040] text-white'}`}>
-                      {entry.managerEmailSent ? <CheckCircle size={14} className="mr-2" /> : <AlertCircle size={14} className="mr-2" />} 
-                      {entry.managerEmailSent ? (activeSeverity === 'critical' ? 'GM NOTIFIED' : 'HOD ALERTED') : (activeSeverity === 'critical' ? 'Escalate to GM Now' : 'Alert Supervisor / HOD')}
-                    </button>
+              <div className="flex justify-between items-start mb-2 mt-1">
+                <div className="flex items-center space-x-2">
+                  {entry.type === 'compliment' ? <ThumbsUp className="text-[#595733]" size={18} /> : <ThumbsDown className="text-[#8e2a2a]" size={18} />}
+                  
+                  {entry.type === 'complaint' && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${SOP_FRAMEWORK[activeSeverity].badge}`}>
+                      {SOP_FRAMEWORK[activeSeverity].label}
+                    </span>
                   )}
                   
-                  {activeSeverity === 'critical' && !sla.isBreached && (
-                    <button onClick={() => handleWhatsAppEscalation(entry)} className="w-full bg-[#595733] hover:bg-[#595733]/90 text-white font-semibold py-3 rounded-lg text-sm flex items-center justify-center shadow-sm">
-                       <MessageSquare size={14} className="mr-2" /> WhatsApp GM Direct Link
-                    </button>
-                  )}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${entry.sentiment?.color || 'bg-gray-50 text-gray-400'}`}>{entry.sentiment?.label || 'Neutral'}</span>
+                </div>
+                <span className="text-xs text-gray-400 flex items-center"><Calendar size={12} className="mr-1" /> {new Date(entry.date).toLocaleDateString()}</span>
+              </div>
+              
+              <h3 className="font-semibold text-gray-800 text-lg">{entry.guestName}</h3>
+              <p className="text-sm font-bold text-gray-600 mt-1 leading-snug">{entry.reason}</p>
+              
+              <div className="grid grid-cols-2 gap-y-2 mt-3 text-sm text-gray-500">
+                <div>Department: <span className="font-semibold text-gray-800">{entry.department}</span></div>
+                <div>Logged By: <span className="font-semibold text-gray-800">{entry.handledBy}</span></div>
+                {entry.type === 'complaint' && <div className="col-span-2 flex items-center">Resolution Cost: <span className="font-semibold text-[#8e2a2a] flex items-center ml-1"><Coins size={14} className="mr-1" /> {localDisplayCost.toFixed(2)}</span></div>}
+                {entry.type === 'compliment' && entry.staffMentioned && <div className="col-span-2 text-[#cf6231] font-semibold flex items-center"><Award size={14} className="mr-1" /> Recognized: {entry.staffMentioned}</div>}
+              </div>
 
-                  <button onClick={() => onResolve(entry.id)} className="w-full bg-amber-500 text-white py-3 rounded-lg text-sm font-semibold shadow-md mt-2">Close Ticket</button>
-                </>
-              )}
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <span className="text-gray-500 block text-xs mb-1">Action Taken</span>
+                <p className="text-gray-700 text-sm leading-relaxed italic">"{entry.actionTaken}"</p>
+              </div>
+              
+              {/* Team Notes Section */}
+              <div className="mt-4 bg-gray-50 rounded-xl p-3 border border-gray-200">
+                <h4 className="text-xs font-bold text-gray-600 mb-2 flex items-center"><MessageSquare size={12} className="mr-1" /> Shared Team Notes</h4>
+                <div className="space-y-2 mb-2 max-h-32 overflow-y-auto">
+                  {entry.comments?.map((c, i) => (
+                    <div key={i} className="bg-white p-2 rounded border border-gray-100 text-xs">
+                      <span className="font-bold text-[#003040]">{c.author}:</span> {c.text}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex space-x-2 mt-2">
+                  <input value={commentInput[entry.id]?.author || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], author: e.target.value}})} placeholder="Name" className="w-1/4 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
+                  <input value={commentInput[entry.id]?.text || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text: e.target.value}})} placeholder="Add internal note..." className="flex-1 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
+                  <button onClick={()=>{ if(!commentInput[entry.id]?.text) return; onAddComment(entry.id, commentInput[entry.id].text, commentInput[entry.id].author || "Staff"); setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text:''}}); }} className="bg-[#003040] text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm active:scale-95">Post</button>
+                </div>
+              </div>
+              
+              {/* Operational Escalation Actions Trigger Maps */}
+              <div className="mt-4 flex flex-col space-y-2">
+                {sla.isBreached && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
+                    <p className="text-xs font-bold text-[#8e2a2a] uppercase text-center">Urgent Escalation Center</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => handleWhatsAppEscalation(entry)} className={`py-2 px-1 text-xs font-semibold rounded-lg border flex items-center justify-center shadow-sm ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
+                        <MessageSquare size={14} className="mr-1" /> {entry.escalationSent ? "Escalated" : "WhatsApp Group"}
+                      </button>
+                      {entry.followUpEmail && (
+                        <button onClick={() => handleSendEmail(entry, 'escalation')} className={`py-2 px-1 text-xs font-semibold rounded-lg border flex items-center justify-center shadow-sm ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
+                          <Mail size={14} className="mr-1" /> Email Handler
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {entry.guestEmail && (
+                  <button onClick={() => handleSendEmail(entry, 'guest')} className={`w-full font-semibold py-2 rounded-lg border transition-colors text-sm flex items-center justify-center shadow-sm ${entry.guestEmailSent ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'}`}>
+                    {entry.guestEmailSent ? <CheckCircle size={14} className="mr-2" /> : <Mail size={14} className="mr-2 text-gray-400" />} {entry.guestEmailSent ? 'GUEST NOTIFIED' : 'Email Guest'}
+                  </button>
+                )}
+                
+                {entry.status === 'open' && (
+                  <>
+                    {entry.followUpEmail && !sla.isBreached && (
+                      <button onClick={() => handleSendEmail(entry, 'manager')} className={`w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center shadow-sm transition-colors ${entry.managerEmailSent ? 'bg-green-600 text-white' : 'bg-[#003040] text-white'}`}>
+                        {entry.managerEmailSent ? <CheckCircle size={14} className="mr-2" /> : <AlertCircle size={14} className="mr-2" />} 
+                        {entry.managerEmailSent ? (activeSeverity === 'critical' ? 'GM NOTIFIED' : 'HOD ALERTED') : (activeSeverity === 'critical' ? 'Escalate to GM Now' : 'Alert Supervisor / HOD')}
+                      </button>
+                    )}
+                    
+                    {activeSeverity === 'critical' && !sla.isBreached && (
+                      <button onClick={() => handleWhatsAppEscalation(entry)} className="w-full bg-[#595733] hover:bg-[#595733]/90 text-white font-semibold py-3 rounded-lg text-sm flex items-center justify-center shadow-sm">
+                         <MessageSquare size={14} className="mr-2" /> WhatsApp GM Direct Link
+                      </button>
+                    )}
+
+                    <button onClick={() => onResolve(entry.id)} className="w-full bg-amber-500 text-white py-3 rounded-lg text-sm font-semibold shadow-md mt-2">Close Ticket</button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </div>
   );
 }
