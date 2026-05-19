@@ -63,7 +63,8 @@ const CURRENCY_MAP = {
   '$': 'USD', '€': 'EUR', '£': 'GBP', 'R': 'ZAR'
 };
 
-const HOD_EMAIL_LIST = "nicolene.claassen@onomohotel.com,chef.sandton@onomohotel.com,rdm.sandton@onomohotel.com,afom.sandton@onomohotel.com,fom.sandton@onomohotel.com,maintenance.sandton@onomohotel.com,hk.sandton@onomohotel.com,restaurant.sandton@onomohotel.com";
+// Outlook requires semicolons for multiple email addresses
+const HOD_EMAIL_LIST = "nicolene.claassen@onomohotel.com;chef.sandton@onomohotel.com;rdm.sandton@onomohotel.com;afom.sandton@onomohotel.com;fom.sandton@onomohotel.com;maintenance.sandton@onomohotel.com;hk.sandton@onomohotel.com;restaurant.sandton@onomohotel.com";
 
 // --- SOP ESCALATION DIRECTIVES (ONOMO PANTONES) ---
 const SOP_FRAMEWORK = {
@@ -245,7 +246,6 @@ export default function App() {
         </div>
       )}
 
-      {/* HEADER BAR BRANDING */}
       <header className="bg-[#003040] text-white p-4 shadow-md z-10">
         <div className="flex justify-between items-center">
           <div>
@@ -272,7 +272,6 @@ export default function App() {
         {activeTab === 'history' && <History entries={entries} onResolve={resolveEntry} onAddComment={addComment} onMarkEmailSent={markEmailSent} currency={currency} exchangeRates={exchangeRates} filter={historyFilter} setFilter={setHistoryFilter} ticker={timeTicker} />}
       </main>
 
-      {/* MAIN NAVIGATION TAB MATRIX */}
       <nav className="bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around p-2 z-10 pb-safe">
         {['dashboard', 'add', 'history'].map((tab) => (
           <button key={tab} onClick={() => { setActiveTab(tab); if(tab==='history') setHistoryFilter('all'); }} className={`flex flex-col items-center p-2 rounded-lg w-1/3 transition-colors ${activeTab === tab ? 'text-[#f18a00] bg-[#f18a00]/10' : 'text-gray-500 hover:text-[#003040]'}`}>
