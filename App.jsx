@@ -32,9 +32,7 @@ import {
   Medal,
   ShieldAlert,
   UserCheck,
-  Users,
-  UserX,
-  Image as ImageIcon
+  Users
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -65,39 +63,51 @@ const CURRENCY_MAP = {
   '$': 'USD', '€': 'EUR', '£': 'GBP', 'R': 'ZAR'
 };
 
-// --- IMMUTABLE DIGITAL SOP ESCALATION MATRIX ---
+// --- SOP ESCALATION DIRECTIVES (ALIGNED TO ONOMO CORPORATE PANTONES) ---
 const SOP_FRAMEWORK = {
   quick: {
     label: 'Quick Resolve',
-    color: 'bg-teal-50 border-teal-200 text-teal-800',
-    badge: 'text-teal-700 bg-teal-100 border-teal-200',
+    color: 'bg-[#595733]/10 border-[#595733]/20 text-[#595733]',
+    badge: 'text-[#595733] bg-[#595733]/10 border-[#595733]/20',
     authority: 'Line Staff Authorized',
-    icon: <UserCheck size={16} className="text-teal-600" />,
-    steps: 'Empowered for immediate resolution at the point of service. Authorized to apply minor bill corrections, room adjustments, or small courtesy food & beverage vouchers on the spot.'
+    icon: <UserCheck size={18} className="text-[#595733]" />,
+    steps: 'Empowered for immediate resolution at the point of service. Authorized to apply minor bill corrections, room adjustments, or courtesy food & beverage vouchers on the spot.'
   },
   intermediate: {
     label: 'Intermediate Escalation',
-    color: 'bg-blue-50 border-blue-200 text-blue-800',
-    badge: 'text-blue-700 bg-blue-100 border-blue-200',
+    color: 'bg-[#cf6231]/10 border-[#cf6231]/20 text-[#cf6231]',
+    badge: 'text-[#cf6231] bg-[#cf6231]/10 border-[#cf6231]/20',
     authority: 'Supervisor / HOD Required',
-    icon: <Users size={16} className="text-blue-600" />,
-    steps: 'Exceeds standard staff operational limits. The HOD or Duty Supervisor must take full ownership, physically connect or directly call the guest, and implement structured service recovery within 45 minutes.'
+    icon: <Users size={18} className="text-[#cf6231]" />,
+    steps: 'Exceeds standard staff limits. The HOD or Duty Supervisor must take direct ownership, contact the guest, and implement structured service recovery within 45 minutes.'
   },
   critical: {
     label: 'Critical Intervention',
-    color: 'bg-red-50 border-red-200 text-red-800',
-    badge: 'text-red-700 bg-red-100 border-red-200',
+    color: 'bg-[#8e2a2a]/10 border-[#8e2a2a]/20 text-[#8e2a2a]',
+    badge: 'text-[#8e2a2a] bg-[#8e2a2a]/10 border-[#8e2a2a]/20',
     authority: 'General Manager Mandate',
-    icon: <ShieldAlert size={16} className="text-red-600 animate-pulse" />,
-    steps: 'Severe operational incident or high-profile guest threat. Requires immediate background escalation alerts sent straight to the GM. Executive leadership must step in physically to handle resolution.'
+    icon: <ShieldAlert size={18} className="text-[#8e2a2a] animate-pulse" />,
+    steps: 'Severe operational incident or high-profile threat. Requires immediate background escalation alerts sent to the GM. Executive leadership must step in physically to resolve.'
   }
+};
+
+// --- DYNAMIC AI CLASSIFICATION ENGINES ---
+const determineSOPSeverity = (text) => {
+  const lower = (text || "").toLowerCase();
+  if (/(fire|flood|injury|theft|vip|gm|general manager|emergency|medical|danger|police|assault|broken lock|power out|no water|furious|unacceptable|terrible|worst|shouting|legal)/.test(lower)) {
+    return 'critical';
+  }
+  if (/(leak|supervisor|slow|rude|dirty|manager|upgrade|delay|wait|noise|loud|hot water|broken|aircon|ac|tv|fridge|card|key|smell|stain|infestation|bug|pest)/.test(lower)) {
+    return 'intermediate';
+  }
+  return 'quick';
 };
 
 const analyzeSentiment = (text) => {
   const lower = (text || "").toLowerCase();
-  if (/(furious|unacceptable|terrible|worst|disgusting|outrageous|angry)/.test(lower)) return { label: 'Furious', emoji: '😡', color: 'text-red-700 bg-red-100 border-red-200' };
-  if (/(slow|dirty|broken|rude|bad|poor|annoyed|wait)/.test(lower)) return { label: 'Irritated', emoji: '😠', color: 'text-orange-700 bg-orange-100 border-orange-200' };
-  if (/(great|excellent|amazing|love|perfect|wonderful|best)/.test(lower)) return { label: 'Delighted', emoji: '🤩', color: 'text-green-700 bg-green-100 border-green-200' };
+  if (/(furious|unacceptable|terrible|worst|disgusting|outrageous|angry)/.test(lower)) return { label: 'Furious', emoji: '😡', color: 'text-[#8e2a2a] bg-[#8e2a2a]/10 border-[#8e2a2a]/20' };
+  if (/(slow|dirty|broken|rude|bad|poor|annoyed|wait)/.test(lower)) return { label: 'Irritated', emoji: '😠', color: 'text-[#cf6231] bg-[#cf6231]/10 border-[#cf6231]/20' };
+  if (/(great|excellent|amazing|love|perfect|wonderful|best)/.test(lower)) return { label: 'Delighted', emoji: '🤩', color: 'text-[#595733] bg-[#595733]/10 border-[#595733]/20' };
   if (/(good|nice|friendly|clean|helpful|happy)/.test(lower)) return { label: 'Happy', emoji: '😊', color: 'text-teal-700 bg-teal-100 border-teal-200' };
   return { label: 'Neutral', emoji: '😐', color: 'text-gray-700 bg-gray-100 border-gray-200' };
 };
@@ -159,7 +169,7 @@ export default function App() {
         setCloudError(null);
       },
       (error) => {
-        setCloudError(`Database Error: ${error.message}. Please click "Publish" in your Firebase Rules tab.`);
+        setCloudError(`Database Error: ${error.message}`);
         setLoading(false);
       }
     );
@@ -167,21 +177,18 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
-  const addEntry = async (newEntry) => {
+  const addEntry = async (newEntry, openWhatsAppTrigger) => {
     if (!user) return showToast('Error: Connection pending...');
+    
+    if (openWhatsAppTrigger) {
+      openWhatsAppTrigger();
+    }
+
     try {
       const entriesRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries');
       await addDoc(entriesRef, { ...newEntry, userId: user.uid });
       setActiveTab('history'); 
-      showToast('Synced to all devices!');
-
-      // AUTOMATED WHATSAPP ROUTING
-      if (newEntry.type === 'complaint' && (newEntry.department === 'Maintenance' || newEntry.department === 'Housekeeping' || newEntry.severity === 'critical')) {
-        let alertHeading = newEntry.severity === 'critical' ? `🚨 *CRITICAL GM INTERVENTION REQUIRED* 🚨` : `🚨 *NEW TICKET ALERT* 🚨`;
-        const formattedMsg = `${alertHeading}\n\n*SOP Status:* ${SOP_FRAMEWORK[newEntry.severity || 'quick'].label}\n*Dept:* ${newEntry.department}\n*Room/Guest:* ${newEntry.guestName}\n*Issue:* ${newEntry.reason}\n*Logged By:* ${newEntry.handledBy}\n\n_Action Required immediately according to operational SOP directives._`;
-        const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(formattedMsg)}`;
-        setTimeout(() => { window.open(whatsappUrl, '_blank'); }, 800);
-      }
+      showToast('Entry saved securely to cloud!');
     } catch (error) {
       showToast(`Save failed: ${error.message}`);
     }
@@ -192,7 +199,7 @@ export default function App() {
     try {
       const entryRef = doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries', id);
       await updateDoc(entryRef, { status: 'resolved', resolvedAt: new Date().toISOString() });
-      showToast('Status updated!');
+      showToast('Ticket marked as resolved.');
     } catch (error) { console.error(error); }
   };
 
@@ -220,41 +227,40 @@ export default function App() {
 
   if (loading && !cloudError) {
     return (
-      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center max-w-md mx-auto p-10 text-center">
-        <Loader2 className="animate-spin text-indigo-600 mb-6" size={60} />
-        <h2 className="text-2xl font-black text-gray-800 tracking-tighter uppercase">Authenticating</h2>
-        <p className="text-gray-400 mt-2 italic text-sm">Securing database connection...</p>
+      <div className="flex flex-col h-screen bg-[#f6ebda] items-center justify-center max-w-md mx-auto p-10 text-center font-sans">
+        <Loader2 className="animate-spin text-[#003040] mb-4" size={48} />
+        <p className="text-[#003040] font-medium animate-pulse">Syncing with secure cloud...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 font-sans max-w-md mx-auto shadow-2xl relative overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#f6ebda] font-sans max-w-md mx-auto shadow-2xl relative overflow-hidden">
       {toast && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 w-[90%] bg-gray-800 text-white px-4 py-3 rounded-xl shadow-2xl z-50 text-sm text-center font-bold flex items-center justify-center animate-in fade-in slide-in-from-top-4">
-          <CheckCircle size={18} className="text-green-400 mr-2 shrink-0" /> {toast}
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 w-[90%] bg-gray-800 text-white px-4 py-3 rounded-xl shadow-2xl z-50 text-sm text-center font-medium animate-in fade-in slide-in-from-top-4 flex items-center justify-center space-x-2">
+          <CheckCircle size={18} className="text-green-400 shrink-0" />
+          <span>{toast}</span>
         </div>
       )}
 
-      <header className="bg-indigo-900 text-white p-4 shadow-md z-10">
+      {/* HEADER BAR BRANDING */}
+      <header className="bg-[#003040] text-white p-4 shadow-md z-10">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-xl font-black uppercase tracking-tighter">Feedback Tracker</h1>
-            <div className="flex items-center text-[9px] text-indigo-300 font-bold tracking-widest mt-1">
-              <RefreshCw size={8} className="mr-1 animate-spin" /> {user ? "SYNC CONNECTED" : "OFFLINE"}
+            <h1 className="text-xl font-bold tracking-wide">Feedback Tracker</h1>
+            <div className="flex items-center text-[10px] text-[#a0c8d2] font-semibold tracking-wider mt-0.5">
+              <RefreshCw size={8} className="mr-1 animate-spin" /> Live Sync Active
             </div>
           </div>
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="bg-indigo-800 text-white border border-indigo-700 rounded p-1 text-xs font-bold outline-none">
+          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="bg-[#003040]/80 text-white border border-[#a0c8d2]/20 rounded p-1 text-xs outline-none focus:ring-2 focus:ring-[#a0c8d2] cursor-pointer font-semibold">
             <option value="$">USD ($)</option><option value="€">EUR (€)</option><option value="£">GBP (£)</option><option value="R">ZAR (R)</option>
           </select>
         </div>
       </header>
       
       {cloudError && (
-        <div className="bg-red-600 text-white px-4 py-4 text-[10px] font-black uppercase tracking-widest text-center z-20 flex flex-col items-center justify-center leading-tight shadow-xl">
-          <div className="flex items-center mb-1 text-sm text-white"><AlertCircle size={18} className="mr-2 shrink-0 animate-pulse" /> ACCESS DENIED</div>
-          <p className="opacity-90 font-bold mb-2">{cloudError}</p>
-          <button onClick={() => window.location.reload()} className="bg-white text-red-600 px-4 py-1 rounded-full font-black text-[9px]">Retry Sync</button>
+        <div className="bg-[#8e2a2a] text-white px-4 py-3 text-xs font-semibold flex items-center justify-center text-center z-20 shadow-md">
+          <AlertCircle size={14} className="mr-2 shrink-0" /> {cloudError}
         </div>
       )}
 
@@ -264,24 +270,19 @@ export default function App() {
         {activeTab === 'history' && <History entries={entries} onResolve={resolveEntry} onAddComment={addComment} onMarkEmailSent={markEmailSent} currency={currency} exchangeRates={exchangeRates} filter={historyFilter} setFilter={setHistoryFilter} ticker={timeTicker} />}
       </main>
 
-      <nav className="bg-white border-t border-gray-100 absolute bottom-0 w-full flex justify-around p-2 z-10 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+      {/* MAIN NAVIGATION TAB MATRIX */}
+      <nav className="bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around p-2 z-10 pb-safe">
         {['dashboard', 'add', 'history'].map((tab) => (
-          <button key={tab} onClick={() => { setActiveTab(tab); if(tab==='history') setHistoryFilter('all'); }} className={`flex flex-col items-center p-2 rounded-xl w-1/3 transition-all ${activeTab === tab ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400'}`}>
+          <button key={tab} onClick={() => { setActiveTab(tab); if(tab==='history') setHistoryFilter('all'); }} className={`flex flex-col items-center p-2 rounded-lg w-1/3 transition-colors ${activeTab === tab ? 'text-[#f18a00] bg-[#f18a00]/10' : 'text-gray-500 hover:text-[#003040]'}`}>
             {tab === 'dashboard' ? <Home size={24} /> : tab === 'add' ? <PlusCircle size={24} /> : <List size={24} />}
-            <span className="text-[10px] font-black uppercase tracking-tighter mt-1">{tab}</span>
+            <span className="text-xs mt-1 font-semibold capitalize">{tab === 'add' ? 'New Entry' : tab}</span>
           </button>
         ))}
       </nav>
       
-      <div className="absolute bottom-[72px] left-0 w-full bg-slate-900 text-white/60 px-3 py-2 text-[8px] font-mono flex flex-col space-y-1 z-10 border-t border-white/10 shadow-2xl">
-        <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-1.5"><ShieldCheck size={10} className={user ? "text-green-400" : "text-amber-400"} /><span className="uppercase font-black tracking-widest text-white/90">Shared Database</span></div>
-            <span className={user ? "text-green-400" : "text-red-400"}>{user ? "ONLINE" : "ERROR"}</span>
-        </div>
-        <div className="flex justify-between items-center opacity-80 border-t border-white/5 pt-1 mt-1">
-            <span>UID: <span className="text-blue-300">{user?.uid || "PENDING"}</span></span>
-            <span>SYNC: <span className="text-white">{lastSync || "N/A"}</span></span>
-        </div>
+      <div className="absolute bottom-[72px] left-0 w-full bg-slate-900 text-white/60 px-3 py-1 text-[8px] font-mono flex justify-between border-t border-white/10 z-10 pointer-events-none">
+        <span>Shared Environment Link Up: Validated</span>
+        {lastSync && <span>Sync: {lastSync}</span>}
       </div>
     </div>
   );
@@ -331,45 +332,46 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick }) {
 
   return (
     <div className="p-4 space-y-4 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-white border border-gray-200 text-xs font-black uppercase p-2 rounded-lg shadow-sm outline-none">
+      <div className="flex justify-between items-center mb-2">
+        <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-white border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-[#003040] focus:border-[#003040] block p-2 font-medium shadow-sm">
           <option value="1">Today</option><option value="7">Last 7 Days</option><option value="30">Last 30 Days</option><option value="all">All Time</option>
         </select>
-        <div className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Analytics</div>
+        <span className="text-sm font-semibold text-gray-400">Live Insights</span>
       </div>
       
       <div className="grid grid-cols-2 gap-4">
-        <StatBox label="Compliments" value={stats.comps} color="text-green-600 bg-green-50 border-green-100" />
-        <StatBox label="Complaints" value={stats.complaints} color="text-red-600 bg-red-50 border-red-100" />
+        <StatBox label="Compliments" value={stats.comps} color="text-green-700 bg-green-50 border-green-100" />
+        <StatBox label="Complaints" value={stats.complaints} color="text-[#8e2a2a] bg-[#8e2a2a]/5 border-[#8e2a2a]/10" />
       </div>
       
       <div className="grid grid-cols-2 gap-4">
-        <MetricCard label="Open Issues" value={stats.open} color="text-amber-600 bg-amber-50" onClick={onOpenTicketsClick} />
-        <MetricCard label="Total Cost" value={`${currency}${stats.cost.toFixed(2)}`} color="text-gray-800 bg-white" />
+        <MetricCard label="Open Issues" value={stats.open} color="bg-red-50 border-red-100 text-[#8e2a2a]" onClick={onOpenTicketsClick} icon={<AlertCircle size={16} />} />
+        <MetricCard label="Total Cost" value={`${currency}${stats.cost.toFixed(2)}`} color="bg-white border-gray-200 text-gray-800" icon={<DollarSign size={16} />} />
       </div>
 
-      <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-6 flex items-center">
-        <Trophy size={14} className="mr-2 text-purple-600" /> Staff Performance Board
+      {/* AMBER & PURPLE RECOGNITION LEADERBOARD */}
+      <h2 className="text-lg font-semibold text-gray-700 mt-6 mb-2 flex items-center">
+        <Trophy size={18} className="mr-2 text-[#ffb131]" /> Staff Performance Board
       </h2>
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 space-y-3.5 shadow-sm">
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 space-y-3 shadow-sm">
         {staffLeaderboard.map((member, index) => {
-          const medalColors = ["text-yellow-500", "text-slate-400", "text-amber-600"];
+          const medalColors = ["text-[#ffb131]", "text-slate-400", "text-[#cf6231]"];
           return (
-            <div key={member.name} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2.5 last:border-0 last:pb-0">
+            <div key={member.name} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2 last:border-0 last:pb-0">
               <div className="flex items-center space-x-3 truncate">
-                <span className="w-5 text-xs font-black text-gray-400 text-center">
-                  {index < 3 ? <Medal size={16} className={medalColors[index]} /> : `${index + 1}`}
+                <span className="w-5 text-center font-bold">
+                  {index < 3 ? <Medal size={18} className={medalColors[index]} /> : index + 1}
                 </span>
-                <span className="font-bold text-gray-800 truncate">{member.name}</span>
+                <span className="font-semibold text-gray-800 truncate">{member.name}</span>
               </div>
-              <span className="bg-purple-50 text-purple-700 font-black text-xs px-3 py-1 rounded-full shrink-0 flex items-center">
-                 <ThumbsUp size={10} className="mr-1" /> {member.count} Praises
+              <span className="bg-[#ffb131]/10 text-[#cf6231] font-bold text-xs px-3 py-1 rounded-full flex items-center">
+                 <ThumbsUp size={12} className="mr-1" /> {member.count} Praises
               </span>
             </div>
           );
         })}
         {staffLeaderboard.length === 0 && (
-          <p className="text-center text-gray-300 italic text-[10px] py-2">No staff mentions captured yet.</p>
+          <p className="text-center text-gray-400 italic text-sm py-2">No staff mentions captured yet.</p>
         )}
       </div>
     </div>
@@ -378,13 +380,22 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick }) {
 
 function StatBox({ label, value, color }) {
   return (
-    <div className={`${color} p-5 rounded-2xl border flex flex-col items-center justify-center`}><span className="text-4xl font-black leading-none">{value}</span><span className="text-[9px] font-black uppercase tracking-widest mt-2 opacity-70">{label}</span></div>
+    <div className={`${color} p-4 rounded-2xl border shadow-sm flex flex-col items-center justify-center`}>
+      <span className="text-3xl font-bold leading-none">{value}</span>
+      <span className="text-sm font-medium text-center mt-1 opacity-80">{label}</span>
+    </div>
   );
 }
 
-function MetricCard({ label, value, color, onClick }) {
+function MetricCard({ label, value, color, onClick, icon }) {
   return (
-    <div onClick={onClick} className={`${color} p-4 rounded-xl border border-gray-100 shadow-sm transition-transform active:scale-95 cursor-pointer flex flex-col justify-between`}><span className="text-[8px] font-black uppercase tracking-widest opacity-50 block mb-1">{label}</span><span className="text-sm font-black truncate block leading-tight">{value}</span></div>
+    <div onClick={onClick} className={`${color} p-3 rounded-xl border shadow-sm transition-all active:scale-[0.98] ${onClick ? 'cursor-pointer hover:shadow-md' : ''} flex flex-col justify-between`}>
+      <div className="flex items-center space-x-2 mb-1">
+        {icon}
+        <span className="text-xs font-medium opacity-70">{label}</span>
+      </div>
+      <span className="text-lg font-bold truncate block">{value}</span>
+    </div>
   );
 }
 
@@ -392,9 +403,13 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
   const [type, setType] = useState('complaint');
   const [form, setForm] = useState({ 
     guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', 
-    handledBy: '', actionTaken: '', cost: '', status: 'resolved', severity: 'quick',
+    handledBy: '', actionTaken: '', cost: '', status: 'resolved',
     followUpEmail: '', followUpPhone: '', guestEmailSent: false, managerEmailSent: false, escalationSent: false, staffMentioned: ''
   });
+
+  const inferredSeverity = useMemo(() => {
+    return type === 'complaint' ? determineSOPSeverity(form.reason) : 'quick';
+  }, [form.reason, type]);
 
   const submit = (e) => {
     e.preventDefault();
@@ -402,95 +417,135 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
     const activeRateScale = exchangeRates[currentISO] || 1;
     const normalizedCostInUSD = (Number(form.cost) || 0) / activeRateScale;
 
-    onSave({ 
+    const finalizedEntry = { 
       ...form, 
       type, 
       date: new Date().toISOString(), 
       sentiment: analyzeSentiment(form.reason), 
       cost: normalizedCostInUSD,
-      severity: type === 'complaint' ? form.severity : 'quick',
+      severity: inferredSeverity, 
       comments: [] 
-    });
+    };
+
+    let whatsappCallback = null;
+    if (type === 'complaint' && (form.department === 'Maintenance' || form.department === 'Housekeeping' || inferredSeverity === 'critical')) {
+      let alertHeading = inferredSeverity === 'critical' ? `🚨 *CRITICAL GM INTERVENTION REQUIRED* 🚨` : `🚨 *NEW TICKET ALERT* 🚨`;
+      const formattedMsg = `${alertHeading}\n\n*SOP Status:* ${SOP_FRAMEWORK[inferredSeverity].label}\n*Dept:* ${form.department}\n*Room/Guest:* ${form.guestName}\n*Issue:* ${form.reason}\n*Logged By:* ${form.handledBy}`;
+      const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(formattedMsg)}`;
+      
+      whatsappCallback = () => {
+        window.open(whatsappUrl, '_blank');
+      };
+    }
+
+    onSave(finalizedEntry, whatsappCallback);
   };
 
   return (
-    <form onSubmit={submit} className="p-4 space-y-4">
-      <div className="flex bg-gray-200 rounded-xl p-1 shadow-inner">
-        <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-3 text-xs font-black uppercase rounded-lg transition-all ${type === 'compliment' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>Compliment</button>
-        <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-3 text-xs font-black uppercase rounded-lg transition-all ${type === 'complaint' ? 'bg-white shadow text-red-600' : 'text-gray-500'}`}>Complaint</button>
+    <form onSubmit={submit} className="p-4 space-y-4 font-sans">
+      <div className="flex bg-gray-200 rounded-lg p-1 mb-6">
+        <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'compliment' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>Compliment</button>
+        <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'complaint' ? 'bg-white shadow text-[#8e2a2a]' : 'text-gray-500'}`}>Complaint</button>
       </div>
 
-      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-        <h3 className="text-[9px] font-black uppercase tracking-widest text-gray-300 border-b pb-2">Guest Identity</h3>
-        <input required value={form.guestName} onChange={e=>setForm({...form, guestName: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm font-bold outline-none" placeholder="Name / Room No." />
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <h3 className="font-bold text-gray-800 border-b pb-2">Guest Details</h3>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Guest Name / Room No.</label>
+          <input required value={form.guestName} onChange={e=>setForm({...form, guestName: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="e.g. Room 412 or John Doe" />
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <input type="email" value={form.guestEmail} onChange={e=>setForm({...form, guestEmail: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none" placeholder="Guest Email" />
-          <input type="tel" value={form.guestPhone} onChange={e=>setForm({...form, guestPhone: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none" placeholder="Guest Phone" />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Guest Email</label>
+            <input type="email" value={form.guestEmail} onChange={e=>setForm({...form, guestEmail: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="guest@email.com" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Guest Phone</label>
+            <input type="tel" value={form.guestPhone} onChange={e=>setForm({...form, guestPhone: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="+1 234..." />
+          </div>
         </div>
       </div>
 
-      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-        <h3 className="text-[9px] font-black uppercase tracking-widest text-gray-300 border-b pb-2">Record Incident</h3>
-        <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm font-bold outline-none">
-          {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
-        </select>
-        
-        {/* SOP SEVERITY SELECTION DROP-DOWN BLOCK */}
-        {type === 'complaint' && (
-          <div>
-            <label className="block text-[8px] font-black uppercase text-gray-400 tracking-wider mb-1.5 ml-1">SOP Classification Tier</label>
-            <select value={form.severity} onChange={e=>setForm({...form, severity: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm font-bold outline-none text-gray-700">
-              <option value="quick">Quick Resolve (Line Staff)</option>
-              <option value="intermediate">Intermediate (Supervisor/HOD Follow-up)</option>
-              <option value="critical">Critical (General Manager Intervention)</option>
-            </select>
-          </div>
-        )}
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <h3 className="font-bold text-gray-800 border-b pb-2">Feedback Details</h3>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Department Mentioned</label>
+          <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040]">
+            {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+          </select>
+        </div>
 
-        <input required value={form.reason} onChange={e=>setForm({...form, reason: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm font-medium outline-none" placeholder="Specific Issue / Reason" />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Specific Issue / Reason</label>
+          <input required value={form.reason} onChange={e=>setForm({...form, reason: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder={type === 'complaint' ? "Provide details to auto-classify escalation..." : "e.g. Great food"} />
+        </div>
         
-        {/* SYSTEM ENFORCED SOP TIP MATRIX BOX */}
-        {type === 'complaint' && (
-          <div className={`p-4 rounded-xl border flex flex-col space-y-2 transition-all ${SOP_FRAMEWORK[form.severity].color}`}>
-            <div className="flex items-center space-x-2 border-b pb-1.5 border-black/5">
-              {SOP_FRAMEWORK[form.severity].icon}
-              <span className="font-black text-xs uppercase tracking-wider">{SOP_FRAMEWORK[form.severity].authority}</span>
+        {type === 'complaint' && form.reason.trim().length > 2 && (
+          <div className={`p-4 rounded-xl border flex flex-col space-y-2 transition-all duration-300 ${SOP_FRAMEWORK[inferredSeverity].color}`}>
+            <div className="flex items-center justify-between border-b pb-1.5 border-black/5">
+              <div className="flex items-center space-x-2">
+                {SOP_FRAMEWORK[inferredSeverity].icon}
+                <span className="font-bold text-xs uppercase tracking-wide">AI Assigned SOP: {SOP_FRAMEWORK[inferredSeverity].label}</span>
+              </div>
             </div>
-            <p className="text-[10px] font-medium leading-relaxed italic">"{SOP_FRAMEWORK[form.severity].steps}"</p>
+            <p className="text-xs leading-relaxed font-semibold opacity-95">Mandate: {SOP_FRAMEWORK[inferredSeverity].authority}</p>
+            <p className="text-[11px] leading-relaxed italic opacity-80">"{SOP_FRAMEWORK[inferredSeverity].steps}"</p>
           </div>
         )}
 
         {type === 'compliment' && (
-           <input value={form.staffMentioned} onChange={e=>setForm({...form, staffMentioned: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm font-bold text-purple-700 outline-none placeholder:text-gray-400" placeholder="Staff Name to Recognize" />
+           <div>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Staff Member Mentioned (Optional)</label>
+             <input value={form.staffMentioned} onChange={e=>setForm({...form, staffMentioned: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040] text-[#003040] font-semibold" placeholder="Who did the guest praise?" />
+           </div>
         )}
-        <textarea required value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} rows="3" className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none" placeholder="Action Taken / Resolution Details..." />
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Action Taken</label>
+          <textarea required value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} rows="3" className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="Details..." />
+        </div>
       </div>
 
-      <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-100 shadow-sm">
-        <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full bg-white border border-indigo-200 rounded-xl p-4 text-sm font-black text-indigo-700 outline-none" placeholder="Your Name" />
+      <div className="bg-[#a0c8d2]/10 p-4 rounded-xl border border-[#a0c8d2]/30 shadow-sm">
+        <label className="block text-sm font-medium text-[#003040] mb-1">Logged By (Your Name)</label>
+        <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full border border-[#a0c8d2] rounded-lg p-3 text-sm font-semibold text-[#003040] outline-none focus:ring-2 focus:ring-[#003040] bg-white" placeholder="Jane Doe" />
       </div>
 
       {type === 'complaint' && (
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-          <h3 className="text-[9px] font-black uppercase tracking-widest text-gray-300 border-b pb-2">Resolution Flow</h3>
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
+          <h3 className="font-bold text-gray-800 border-b pb-2">Ticket Resolution</h3>
           <div className="grid grid-cols-2 gap-4">
-            <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm font-bold outline-none text-red-700">
-              <option value="open">Keep Ticket Open</option><option value="resolved">Resolved Now</option>
-            </select>
-            <div className="relative w-full">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-gray-400">{currency}</span>
-              <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-200 rounded-xl p-4 pl-8 text-sm font-black text-red-600 outline-none w-full" placeholder="Cost" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040] bg-white font-medium">
+                <option value="open">Open</option><option value="resolved">Resolved</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cost ({currency})</label>
+              <div className="relative w-full">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">{currency}</span>
+                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-300 rounded-lg p-3 pl-8 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
+              </div>
             </div>
           </div>
           {form.status === 'open' && (
             <div className="space-y-3 pt-2 border-t border-gray-100 animate-in fade-in duration-300">
-              <input type="email" value={form.followUpEmail} onChange={e=>setForm({...form, followUpEmail: e.target.value})} className="w-full bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm outline-none placeholder:text-amber-400" placeholder={form.severity === 'critical' ? "General Manager Email" : "Supervisor / HOD Email"} />
-              <input type="tel" value={form.followUpPhone} onChange={e=>setForm({...form, followUpPhone: e.target.value})} className="w-full bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm outline-none placeholder:text-amber-400" placeholder={form.severity === 'critical' ? "GM WhatsApp Mobile (+...)" : "Handler WhatsApp Mobile (+...)"} />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{inferredSeverity === 'critical' ? 'General Manager Email' : 'Supervisor / HOD Email'}</label>
+                <input type="email" value={form.followUpEmail} onChange={e=>setForm({...form, followUpEmail: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="manager@hotel.com" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{inferredSeverity === 'critical' ? 'GM WhatsApp Number' : 'Handler WhatsApp Number'}</label>
+                <input type="tel" value={form.followUpPhone} onChange={e=>setForm({...form, followUpPhone: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="e.g. +27821234567" />
+              </div>
             </div>
           )}
         </div>
       )}
-      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm transition-transform active:scale-95">Push to Cloud Sync</button>
+      <button type="submit" className="w-full bg-[#003040] text-white font-bold py-4 rounded-xl mt-4 hover:bg-[#003040]/90 transition-colors shadow-lg active:scale-95">
+        Submit & Sync to Cloud
+      </button>
     </form>
   );
 }
@@ -522,7 +577,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
       const sla = getSLADetails(entry);
       to = entry.followUpEmail || "";
       sub = `🚨 [SLA BREACH ALERT] ${entry.department} Ticket Overdue`;
-      body = `WARNING: The following ticket has breached its 2-hour resolution window.\n\nOverdue by: ${sla.hours}h ${sla.minutes}m\nRoom/Guest: ${entry.guestName}\nIssue: ${entry.reason}\nLogged By: ${entry.handledBy}\n\nPlease update or resolve this issue immediately.`;
+      body = `WARNING: The following ticket has breached its 2-hour resolution window.\n\nOverdue by: ${sla.hours}h ${sla.minutes}m\nRoom/Guest: ${entry.guestName}\nIssue: ${entry.reason}\nLogged By: ${entry.handledBy}`;
     } else {
       to = entry.guestEmail || "";
       sub = entry.type === 'compliment' ? "Thank you from the Hotel!" : "Following up on your experience";
@@ -538,9 +593,9 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     let msg = "";
     
     if (entry.severity === 'critical') {
-      msg = `🚨 *CRITICAL GM ACTION INTERVENTION* 🚨\n\nA critical incident requires executive review and physical service recovery action.\n\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}\n*Logged By:* ${entry.handledBy}\n\n_SOP dictates immediate executive response contact._`;
+      msg = `🚨 *CRITICAL GM ACTION INTERVENTION* 🚨\n\nA critical incident requires executive review and physical service recovery action.\n\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}\n*Logged By:* ${entry.handledBy}`;
     } else {
-      msg = `⚠️ *SLA BREACH NOTIFICATION* ⚠️\n\nThis ticket has crossed its 2-hour threshold without finalization.\n\n*Overdue Time:* ${sla.hours}h ${sla.minutes}m\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}\n\n_Please action and complete this ticket on the link immediately!_`;
+      msg = `⚠️ *SLA BREACH NOTIFICATION* ⚠️\n\nThis ticket has crossed its 2-hour threshold without finalization.\n\n*Overdue Time:* ${sla.hours}h ${sla.minutes}m\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}`;
     }
     
     const whatsappUrl = cleanedPhone 
@@ -551,13 +606,13 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     onMarkEmailSent(entry.id, 'escalation');
   };
 
-  if (entries.length === 0) return <div className="p-20 text-center font-black text-gray-300 uppercase text-xs italic">No records...</div>;
+  if (entries.length === 0) return <div className="p-8 text-center text-gray-500 flex flex-col items-center h-full justify-center"><List size={48} className="mb-4 text-gray-300" /><p>No records found...</p></div>;
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex bg-gray-200 rounded-xl p-1 mb-4 shadow-inner">
+      <div className="flex bg-gray-200 rounded-lg p-1 mb-4 shadow-inner">
         {['all', 'open', 'resolved'].map(f => (
-          <button key={f} onClick={() => setFilter(f)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${filter === f ? 'bg-white shadow text-indigo-700' : 'text-gray-400'}`}>{f}</button>
+          <button key={f} onClick={() => setFilter(f)} className={`flex-1 py-1.5 text-xs font-bold rounded-md capitalize transition-all ${filter === f ? 'bg-white shadow text-[#003040]' : 'text-gray-500'}`}>{f}</button>
         ))}
       </div>
       {filtered.map(entry => {
@@ -565,75 +620,91 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
         const sla = getSLADetails(entry);
         const activeSeverity = entry.severity || 'quick';
 
+        // Direct border evaluation matrix maps to Onomo specific pantone tiers
+        const leftBorderColor = sla.isBreached 
+          ? '#8e2a2a' 
+          : (entry.type === 'compliment' 
+              ? '#595733' 
+              : activeSeverity === 'critical' 
+                ? '#8e2a2a' 
+                : activeSeverity === 'intermediate' 
+                  ? '#cf6231' 
+                  : '#595733');
+
         return (
           <div 
             key={entry.id} 
-            className={`bg-white p-5 rounded-2xl shadow-sm border border-l-4 transition-all duration-300 ${
-              sla.isBreached ? 'border-red-600 bg-red-50/20' : 'border-gray-100'
+            className={`bg-white p-4 rounded-xl shadow-sm border border-l-4 transition-all duration-300 ${
+              sla.isBreached ? 'border-[#8e2a2a] bg-[#8e2a2a]/5' : 'border-gray-200'
             }`} 
-            style={{ borderLeftColor: sla.isBreached ? '#dc2626' : (entry.type === 'compliment' ? '#10b981' : activeSeverity === 'critical' ? '#ef4444' : activeSeverity === 'intermediate' ? '#3b82f6' : '#10b981') }}
+            style={{ borderLeftColor: leftBorderColor }}
           >
             {sla.isBreached && (
-              <div className="mb-3 -mx-5 -mt-5 bg-red-600 text-white font-black uppercase text-[9px] tracking-widest p-2 flex items-center justify-center space-x-2 animate-pulse rounded-t-xl">
+              <div className="mb-3 -mx-4 -mt-4 bg-[#8e2a2a] text-white font-bold uppercase text-[10px] tracking-wider p-2 flex items-center justify-center space-x-2 animate-pulse rounded-t-xl">
                 <Clock size={12} />
                 <span>⚠️ SLA BREACHED: Overdue by {sla.hours}h {sla.minutes}m</span>
               </div>
             )}
 
-            <div className="flex justify-between items-start mb-3">
+            <div className="flex justify-between items-start mb-2 mt-1">
               <div className="flex items-center space-x-2">
-                {entry.type === 'compliment' ? <ThumbsUp className="text-green-500" size={16} /> : <ThumbsDown className="text-red-500" size={16} />}
+                {entry.type === 'compliment' ? <ThumbsUp className="text-[#595733]" size={18} /> : <ThumbsDown className="text-[#8e2a2a]" size={18} />}
                 
-                {/* DYNAMIC HIERARCHICAL SOP STATUS BADGES */}
                 {entry.type === 'complaint' && (
-                  <span className={`text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border ${SOP_FRAMEWORK[activeSeverity].badge}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${SOP_FRAMEWORK[activeSeverity].badge}`}>
                      {SOP_FRAMEWORK[activeSeverity].label}
                   </span>
                 )}
                 
-                <span className={`text-[8px] px-2 py-0.5 rounded-full font-black border ${entry.sentiment?.color || 'bg-gray-50 text-gray-400'}`}>{entry.sentiment?.label || 'Neutral'}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${entry.sentiment?.color || 'bg-gray-50 text-gray-400'}`}>{entry.sentiment?.label || 'Neutral'}</span>
               </div>
-              <span className="text-[9px] font-bold text-gray-300">{new Date(entry.date).toLocaleDateString()}</span>
+              <span className="text-xs text-gray-400 flex items-center"><Calendar size={12} className="mr-1" /> {new Date(entry.date).toLocaleDateString()}</span>
             </div>
             
-            <h3 className="font-black text-gray-800 text-lg leading-tight mb-1">{entry.guestName}</h3>
-            <p className="text-sm font-bold text-gray-600 leading-snug">{entry.reason}</p>
+            <h3 className="font-semibold text-gray-800 text-lg">{entry.guestName}</h3>
+            <p className="text-sm font-bold text-gray-600 mt-1 leading-snug">{entry.reason}</p>
             
-            <div className="grid grid-cols-2 gap-3 mt-4 text-[9px] font-black uppercase tracking-widest text-gray-400">
-              <div>DEPT: <span className="text-gray-800">{entry.department}</span></div>
-              <div>BY: <span className="text-gray-800">{entry.handledBy}</span></div>
-              {entry.type === 'complaint' && <div>COST: <span className="text-red-600">{currency}{localDisplayCost.toFixed(2)}</span></div>}
-              {entry.type === 'compliment' && entry.staffMentioned && <div className="col-span-2 text-purple-700 font-bold flex items-center"><Award size={12} className="mr-1" /> Recognized: {entry.staffMentioned}</div>}
+            <div className="grid grid-cols-2 gap-y-2 mt-3 text-sm text-gray-500">
+              <div>Department: <span className="font-semibold text-gray-800">{entry.department}</span></div>
+              <div>Logged By: <span className="font-semibold text-gray-800">{entry.handledBy}</span></div>
+              {entry.type === 'complaint' && <div>Resolution Cost: <span className="font-semibold text-[#8e2a2a]">{currency}{localDisplayCost.toFixed(2)}</span></div>}
+              {entry.type === 'compliment' && entry.staffMentioned && <div className="col-span-2 text-[#cf6231] font-semibold flex items-center"><Award size={14} className="mr-1" /> Recognized: {entry.staffMentioned}</div>}
             </div>
 
-            <div className="mt-4 p-4 bg-gray-50 rounded-xl text-xs text-gray-600 italic border border-gray-100">"{entry.actionTaken}"</div>
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <span className="text-gray-500 block text-xs mb-1">Action Taken</span>
+              <p className="text-gray-700 text-sm leading-relaxed italic">"{entry.actionTaken}"</p>
+            </div>
             
-            {/* Notes system */}
-            <div className="mt-5 space-y-2">
-              {entry.comments?.map((c, i) => (
-                <div key={i} className="text-[10px] bg-indigo-50/50 p-2 rounded-lg border border-indigo-100/50">
-                  <span className="font-black text-indigo-700 uppercase">{c.author}:</span> {c.text}
-                </div>
-              ))}
+            {/* Team Notes Section */}
+            <div className="mt-4 bg-gray-50 rounded-xl p-3 border border-gray-200">
+              <h4 className="text-xs font-bold text-gray-600 mb-2 flex items-center"><MessageSquare size={12} className="mr-1" /> Shared Team Notes</h4>
+              <div className="space-y-2 mb-2 max-h-32 overflow-y-auto">
+                {entry.comments?.map((c, i) => (
+                  <div key={i} className="bg-white p-2 rounded border border-gray-100 text-xs">
+                    <span className="font-bold text-[#003040]">{c.author}:</span> {c.text}
+                  </div>
+                ))}
+              </div>
               <div className="flex space-x-2 mt-2">
-                <input value={commentInput[entry.id]?.author || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], author: e.target.value}})} placeholder="Name..." className="w-1/4 bg-gray-50 border border-gray-100 rounded-lg p-2 text-xs outline-none" />
-                <input value={commentInput[entry.id]?.text || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text: e.target.value}})} placeholder="Type note..." className="flex-1 bg-gray-50 border border-gray-100 rounded-lg p-2 text-xs outline-none" />
-                <button onClick={()=>{ if(!commentInput[entry.id]?.text) return; onAddComment(entry.id, commentInput[entry.id].text, commentInput[entry.id].author || "Staff"); setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text:''}}); }} className="bg-indigo-600 text-white px-3 py-2 rounded-lg font-black text-[10px]">POST</button>
+                <input value={commentInput[entry.id]?.author || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], author: e.target.value}})} placeholder="Name" className="w-1/4 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
+                <input value={commentInput[entry.id]?.text || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text: e.target.value}})} placeholder="Add internal note..." className="flex-1 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
+                <button onClick={()=>{ if(!commentInput[entry.id]?.text) return; onAddComment(entry.id, commentInput[entry.id].text, commentInput[entry.id].author || "Staff"); setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text:''}}); }} className="bg-[#003040] text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm active:scale-95">Post</button>
               </div>
             </div>
             
-            {/* Action Buttons Matrix */}
-            <div className="mt-6 flex flex-col space-y-2">
+            {/* Operational Escalation Actions Trigger Maps */}
+            <div className="mt-4 flex flex-col space-y-2">
               {sla.isBreached && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
-                  <p className="text-[8px] font-black text-red-600 uppercase tracking-wider text-center">Urgent Escalation Center</p>
+                  <p className="text-xs font-bold text-[#8e2a2a] uppercase text-center">Urgent Escalation Center</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => handleWhatsAppEscalation(entry)} className={`py-2 px-1 text-[9px] font-black uppercase rounded-lg border flex items-center justify-center transition-all ${entry.escalationSent ? 'bg-green-600 border-green-700 text-white' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
-                      <MessageSquare size={12} className="mr-1" /> {entry.escalationSent ? "Escalated" : "WhatsApp Group"}
+                    <button onClick={() => handleWhatsAppEscalation(entry)} className={`py-2 px-1 text-xs font-semibold rounded-lg border flex items-center justify-center shadow-sm ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
+                      <MessageSquare size={14} className="mr-1" /> {entry.escalationSent ? "Escalated" : "WhatsApp Group"}
                     </button>
                     {entry.followUpEmail && (
-                      <button onClick={() => handleSendEmail(entry, 'escalation')} className={`py-2 px-1 text-[9px] font-black uppercase rounded-lg border flex items-center justify-center transition-all ${entry.escalationSent ? 'bg-green-600 border-green-700 text-white' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
-                        <Mail size={12} className="mr-1" /> Email Handler
+                      <button onClick={() => handleSendEmail(entry, 'escalation')} className={`py-2 px-1 text-xs font-semibold rounded-lg border flex items-center justify-center shadow-sm ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
+                        <Mail size={14} className="mr-1" /> Email Handler
                       </button>
                     )}
                   </div>
@@ -641,7 +712,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
               )}
 
               {entry.guestEmail && (
-                <button onClick={() => handleSendEmail(entry, 'guest')} className={`w-full py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest flex items-center justify-center transition-colors shadow-sm ${entry.guestEmailSent ? 'bg-green-50 border-green-200 text-green-700' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}>
+                <button onClick={() => handleSendEmail(entry, 'guest')} className={`w-full font-semibold py-2 rounded-lg border transition-colors text-sm flex items-center justify-center shadow-sm ${entry.guestEmailSent ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'}`}>
                   {entry.guestEmailSent ? <CheckCircle size={14} className="mr-2" /> : <Mail size={14} className="mr-2 text-gray-400" />} {entry.guestEmailSent ? 'GUEST NOTIFIED' : 'Email Guest'}
                 </button>
               )}
@@ -649,26 +720,19 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
               {entry.status === 'open' && (
                 <>
                   {entry.followUpEmail && !sla.isBreached && (
-                    <button 
-                      onClick={() => handleSendEmail(entry, 'manager')} 
-                      className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center shadow-lg active:scale-95 transition-colors ${
-                        entry.managerEmailSent ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
-                      }`}
-                    >
+                    <button onClick={() => handleSendEmail(entry, 'manager')} className={`w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center shadow-sm transition-colors ${entry.managerEmailSent ? 'bg-green-600 text-white' : 'bg-[#003040] text-white'}`}>
                       {entry.managerEmailSent ? <CheckCircle size={14} className="mr-2" /> : <AlertCircle size={14} className="mr-2" />} 
-                      {/* DYNAMIC SCALE TEXT MAP MATCHING Hierarchy Level */}
                       {entry.managerEmailSent ? (activeSeverity === 'critical' ? 'GM NOTIFIED' : 'HOD ALERTED') : (activeSeverity === 'critical' ? 'Escalate to GM Now' : 'Alert Supervisor / HOD')}
                     </button>
                   )}
                   
-                  {/* DYNAMIC WHATSAPP SHORTCUT DISPATCH TRIGGER FOR CRITICAL NOT BREACHED TICKETS */}
                   {activeSeverity === 'critical' && !sla.isBreached && (
-                    <button onClick={() => handleWhatsAppEscalation(entry)} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center justify-center">
+                    <button onClick={() => handleWhatsAppEscalation(entry)} className="w-full bg-[#595733] hover:bg-[#595733]/90 text-white font-semibold py-3 rounded-lg text-sm flex items-center justify-center shadow-sm">
                        <MessageSquare size={14} className="mr-2" /> WhatsApp GM Direct Link
                     </button>
                   )}
 
-                  <button onClick={() => onResolve(entry.id)} className="w-full bg-amber-500 text-white py-3 rounded-xl text-[10px] font-black uppercase mt-2 shadow-lg">Close Ticket</button>
+                  <button onClick={() => onResolve(entry.id)} className="w-full bg-amber-500 text-white py-3 rounded-lg text-sm font-semibold shadow-md mt-2">Close Ticket</button>
                 </>
               )}
             </div>
