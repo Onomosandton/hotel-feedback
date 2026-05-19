@@ -32,7 +32,8 @@ import {
   Medal,
   ShieldAlert,
   UserCheck,
-  Users
+  Users,
+  AlertTriangle
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -56,15 +57,48 @@ const db = getFirestore(app);
 const SHARED_APP_ID = "hotel_feedback_main_sync";
 
 const DEPARTMENTS = [
-  'Front Desk', 'Housekeeping', 'Food & Beverage', 'Maintenance', 'Concierge', 'Spa & Wellness', 'Valet/Parking'
+  'Front Desk', 'Housekeeping', 'Food & Beverage', 'Maintenance', 'Concierge', 'Spa & Wellness', 'Valet/Parking', 'Security/General'
 ];
 
 const CURRENCY_MAP = {
   '$': 'USD', '€': 'EUR', '£': 'GBP', 'R': 'ZAR'
 };
 
-// Outlook requires semicolons for multiple email addresses
 const HOD_EMAIL_LIST = "nicolene.claassen@onomohotel.com;chef.sandton@onomohotel.com;rdm.sandton@onomohotel.com;afom.sandton@onomohotel.com;fom.sandton@onomohotel.com;maintenance.sandton@onomohotel.com;hk.sandton@onomohotel.com;restaurant.sandton@onomohotel.com";
+
+// --- AI DEPARTMENTAL SUGGESTION DICTIONARIES ---
+const SUGGESTED_RESOLUTIONS = {
+  'Front Desk': 'Listen actively, apologize sincerely, and offer a complimentary room upgrade or late checkout if appropriate.',
+  'Housekeeping': 'Dispatch housekeeping immediately to rectify. Apologize and offer a complimentary amenity (e.g., fruit basket).',
+  'Food & Beverage': 'Replace the item immediately. Consider comping the meal or offering a complimentary beverage/dessert.',
+  'Maintenance': 'Send maintenance within 15 mins. Offer a room move if the issue cannot be resolved swiftly.',
+  'Concierge': 'Apologize for the inconvenience, provide a better alternative recommendation, and offer a small courtesy gift.',
+  'Spa & Wellness': 'Reschedule the service if needed, apologize, and offer a discount on their next treatment.',
+  'Valet/Parking': 'Retrieve the vehicle promptly, apologize, and waive the parking fee for the day.',
+  'Security/General': 'Ensure guest safety immediately. Escalate to management and document all details.'
+};
+
+const SUGGESTED_COMPLIMENT_ACTIONS = {
+  'Front Desk': 'Thank the guest, share the feedback at the next briefing, and note it on the guest profile.',
+  'Housekeeping': 'Pass the praise to the specific housekeeper and recognize them on the staff board.',
+  'Food & Beverage': 'Share the compliment with the chef and servers. Invite the guest back.',
+  'Maintenance': 'Commend the technician for their promptness and quality.',
+  'Concierge': 'Recognize the concierge for their excellent recommendations.',
+  'Spa & Wellness': 'Praise the therapist and encourage the guest to leave a public review.',
+  'Valet/Parking': 'Thank the valet team for their efficiency and care.',
+  'Security/General': 'Commend the team for maintaining a safe and welcoming environment.'
+};
+
+const SUGGESTED_INCIDENT_ACTIONS = {
+  'Front Desk': 'Log incident details, secure any evidence, and inform the Duty Manager.',
+  'Housekeeping': 'Do not disturb the scene. Immediately contact Security and the Executive Housekeeper.',
+  'Food & Beverage': 'If medical, call for first aid. Clear the immediate area and notify the F&B Manager.',
+  'Maintenance': 'Cordon off the area to prevent injury. Notify the Chief Engineer and Duty Manager.',
+  'Concierge': 'Assist the guest calmly. Contact local authorities or medical help if instructed by management.',
+  'Spa & Wellness': 'Provide immediate care if medical. Document the incident and notify the Spa Manager.',
+  'Valet/Parking': 'Document vehicle damage or theft details. Involve Security and the guest immediately.',
+  'Security/General': 'Follow standard emergency protocols. Secure the area, assist guests, and alert the General Manager.'
+};
 
 // --- SOP ESCALATION DIRECTIVES (ONOMO PANTONES) ---
 const SOP_FRAMEWORK = {
@@ -96,7 +130,7 @@ const SOP_FRAMEWORK = {
 
 const determineSOPSeverity = (text) => {
   const lower = (text || "").toLowerCase();
-  if (/(fire|flood|injury|theft|vip|gm|general manager|emergency|medical|danger|police|assault|broken lock|power out|no water|furious|unacceptable|terrible|worst|shouting|legal)/.test(lower)) {
+  if (/(fire|flood|injury|theft|stolen|vip|gm|general manager|emergency|medical|danger|police|assault|broken lock|power out|no water|furious|unacceptable|terrible|worst|shouting|legal)/.test(lower)) {
     return 'critical';
   }
   if (/(leak|supervisor|slow|rude|dirty|manager|upgrade|delay|wait|noise|loud|hot water|broken|aircon|ac|tv|fridge|card|key|smell|stain|infestation|bug|pest)/.test(lower)) {
@@ -107,7 +141,7 @@ const determineSOPSeverity = (text) => {
 
 const analyzeSentiment = (text) => {
   const lower = (text || "").toLowerCase();
-  if (/(furious|unacceptable|terrible|worst|disgusting|outrageous|angry)/.test(lower)) return { label: 'Furious', emoji: '😡', color: 'text-[#8e2a2a] bg-[#8e2a2a]/10 border-[#8e2a2a]/20' };
+  if (/(furious|unacceptable|terrible|worst|disgusting|outrageous|angry|stolen|injury|emergency)/.test(lower)) return { label: 'Severe', emoji: '🚨', color: 'text-[#8e2a2a] bg-[#8e2a2a]/10 border-[#8e2a2a]/20' };
   if (/(slow|dirty|broken|rude|bad|poor|annoyed|wait)/.test(lower)) return { label: 'Irritated', emoji: '😠', color: 'text-[#cf6231] bg-[#cf6231]/10 border-[#cf6231]/20' };
   if (/(great|excellent|amazing|love|perfect|wonderful|best)/.test(lower)) return { label: 'Delighted', emoji: '🤩', color: 'text-[#595733] bg-[#595733]/10 border-[#595733]/20' };
   if (/(good|nice|friendly|clean|helpful|happy)/.test(lower)) return { label: 'Happy', emoji: '😊', color: 'text-teal-700 bg-teal-100 border-teal-200' };
@@ -316,20 +350,23 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
   }, [filtered]);
 
   const stats = useMemo(() => {
-    let comps = 0, complaints = 0, cost = 0, open = 0;
+    let comps = 0, complaints = 0, incidents = 0, cost = 0, open = 0;
     const targetISO = CURRENCY_MAP[currency] || 'USD';
     const currentViewMultiplier = exchangeRates[targetISO] || 1;
 
     filtered.forEach(e => {
-      if (e.type === 'compliment') {
-        comps++;
+      if (e.type === 'compliment') comps++;
+      else if (e.type === 'incident') {
+        incidents++;
+        cost += ((Number(e.cost) || 0) * currentViewMultiplier);
+        if (e.status === 'open') open++;
       } else {
         complaints++;
         cost += ((Number(e.cost) || 0) * currentViewMultiplier);
         if (e.status === 'open') open++;
       }
     });
-    return { comps, complaints, cost, open };
+    return { comps, complaints, incidents, cost, open };
   }, [filtered, currency, exchangeRates]);
 
   const trendData = useMemo(() => {
@@ -349,7 +386,7 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
       const eDate = new Date(e.date).toDateString();
       const dayMatch = days.find(d => d.date === eDate);
       if (dayMatch) {
-        if (e.type === 'complaint') dayMatch.complaints++;
+        if (e.type === 'complaint' || e.type === 'incident') dayMatch.complaints++;
         if (e.type === 'compliment') dayMatch.compliments++;
       }
     });
@@ -359,7 +396,7 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
   }, [filtered]);
 
   const exportCSV = () => {
-    const headers = ['Type', 'Date', 'Guest Name', 'Guest Email', 'Guest Phone', 'Department', 'Severity', 'Reason', 'Action', 'Base Cost (USD)', 'Status', 'Handled By', 'Sentiment'];
+    const headers = ['Type', 'Date', 'Guest/Location', 'Guest Email', 'Guest Phone', 'Department', 'Severity', 'Reason', 'Action', 'Base Cost (USD)', 'Status', 'Handled By', 'Sentiment'];
     const rows = filtered.map(e => {
       const sentimentStr = e.sentiment ? e.sentiment.label : 'N/A';
       const safeReason = e.reason ? String(e.reason).replace(/"/g, '""') : '';
@@ -380,26 +417,29 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
     const todayStr = new Date().toDateString();
     const todaysEntries = entries.filter(e => new Date(e.date).toDateString() === todayStr);
 
-    let eodComps = 0, eodComplaints = 0, eodCost = 0, eodOpen = 0;
+    let eodComps = 0, eodComplaints = 0, eodIncidents = 0, eodCost = 0, eodOpen = 0;
     const targetISO = CURRENCY_MAP[currency] || 'USD';
     const currentViewMultiplier = exchangeRates[targetISO] || 1;
     let detailsText = "";
 
     todaysEntries.forEach((e, i) => {
-      if (e.type === 'compliment') {
-        eodComps++;
+      if (e.type === 'compliment') eodComps++;
+      else if (e.type === 'incident') {
+        eodIncidents++;
+        eodCost += ((Number(e.cost) || 0) * currentViewMultiplier);
+        if (e.status === 'open') eodOpen++;
       } else {
         eodComplaints++;
         eodCost += ((Number(e.cost) || 0) * currentViewMultiplier);
         if (e.status === 'open') eodOpen++;
       }
       
-      const statusText = e.type === 'complaint' ? ` | Status: ${e.status.toUpperCase()}` : '';
+      const statusText = (e.type === 'complaint' || e.type === 'incident') ? ` | Status: ${e.status.toUpperCase()}` : '';
       detailsText += `${i + 1}. [${e.type.toUpperCase()}] ${e.department} - ${e.guestName}\n   Issue/Reason: ${e.reason}${statusText}\n\n`;
     });
 
     const subject = `Daily Hotel Feedback Report - ${new Date().toLocaleDateString()}`;
-    const body = `HOTEL FEEDBACK EOD REPORT\nDate: ${new Date().toLocaleDateString()}\n\n--- TODAY'S SUMMARY ---\nCompliments: ${eodComps}\nComplaints: ${eodComplaints}\nTickets Still Open: ${eodOpen}\nResolution Cost: ${currency}${eodCost.toFixed(2)}\n\n--- DETAILED LOGS ---\n${detailsText || "No feedback logged today."}\n\nGenerated by Onomo Feedback Tracker`;
+    const body = `HOTEL FEEDBACK EOD REPORT\nDate: ${new Date().toLocaleDateString()}\n\n--- TODAY'S SUMMARY ---\nCompliments: ${eodComps}\nComplaints: ${eodComplaints}\nIncidents: ${eodIncidents}\nTickets Still Open: ${eodOpen}\nResolution Cost: ${currency}${eodCost.toFixed(2)}\n\n--- DETAILED LOGS ---\n${detailsText || "No feedback logged today."}\n\nGenerated by Onomo Feedback Tracker`;
 
     window.location.href = `mailto:${HOD_EMAIL_LIST}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
@@ -420,9 +460,10 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
         </div>
       </div>
       
-      <div className="grid grid-cols-2 gap-4">
-        <StatBox label="Compliments" value={stats.comps} color="text-green-700 bg-green-50 border-green-100 hover:bg-green-100 cursor-pointer transition-colors" onClick={() => onStatClick('compliment')} />
+      <div className="grid grid-cols-3 gap-2">
+        <StatBox label="Praises" value={stats.comps} color="text-green-700 bg-green-50 border-green-100 hover:bg-green-100 cursor-pointer transition-colors" onClick={() => onStatClick('compliment')} />
         <StatBox label="Complaints" value={stats.complaints} color="text-[#8e2a2a] bg-[#8e2a2a]/5 border-[#8e2a2a]/10 hover:bg-[#8e2a2a]/10 cursor-pointer transition-colors" onClick={() => onStatClick('complaint')} />
+        <StatBox label="Incidents" value={stats.incidents} color="text-[#003040] bg-[#a0c8d2]/20 border-[#a0c8d2]/40 hover:bg-[#a0c8d2]/40 cursor-pointer transition-colors" onClick={() => onStatClick('incident')} />
       </div>
       
       <div className="grid grid-cols-2 gap-4">
@@ -476,8 +517,8 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
 function StatBox({ label, value, color, onClick }) {
   return (
     <div onClick={onClick} className={`${color} p-4 rounded-2xl border shadow-sm flex flex-col items-center justify-center ${onClick ? 'active:scale-95' : ''}`}>
-      <span className="text-3xl font-bold leading-none">{value}</span>
-      <span className="text-sm font-medium text-center mt-1 opacity-80">{label}</span>
+      <span className="text-2xl font-bold leading-none">{value}</span>
+      <span className="text-[10px] font-semibold text-center mt-1 opacity-80">{label}</span>
     </div>
   );
 }
@@ -503,7 +544,7 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
   });
 
   const inferredSeverity = useMemo(() => {
-    return type === 'complaint' ? determineSOPSeverity(form.reason) : 'quick';
+    return (type === 'complaint' || type === 'incident') ? determineSOPSeverity(form.reason) : 'quick';
   }, [form.reason, type]);
 
   const submit = (e) => {
@@ -523,13 +564,14 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
     };
 
     let whatsappCallback = null;
-    if (type === 'complaint' && (form.department === 'Maintenance' || form.department === 'Housekeeping' || inferredSeverity === 'critical')) {
+    if ((type === 'complaint' || type === 'incident') && (form.department === 'Maintenance' || form.department === 'Housekeeping' || inferredSeverity === 'critical')) {
       let alertHeading = inferredSeverity === 'critical' ? `🚨 *CRITICAL GM INTERVENTION REQUIRED* 🚨` : `🚨 *NEW TICKET ALERT* 🚨`;
-      const formattedMsg = `${alertHeading}\n\n*SOP Status:* ${SOP_FRAMEWORK[inferredSeverity].label}\n*Dept:* ${form.department}\n*Room/Guest:* ${form.guestName}\n*Issue:* ${form.reason}\n*Logged By:* ${form.handledBy}`;
+      const formattedMsg = `${alertHeading}\n\n*Type:* ${type.toUpperCase()}\n*SOP Status:* ${SOP_FRAMEWORK[inferredSeverity].label}\n*Dept:* ${form.department}\n*Guest/Location:* ${form.guestName}\n*Details:* ${form.reason}\n*Logged By:* ${form.handledBy}`;
       const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(formattedMsg)}`;
       
       whatsappCallback = () => {
-        window.open(whatsappUrl, '_blank');
+        // Target a specific window name to prevent duplicate tabs
+        window.open(whatsappUrl, 'whatsapp_shared_tab');
       };
     }
 
@@ -545,15 +587,16 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
   return (
     <form onSubmit={submit} className="p-4 space-y-4 font-sans">
       <div className="flex bg-gray-200 rounded-lg p-1 mb-6">
-        <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'compliment' ? 'bg-white shadow text-[#595733]' : 'text-gray-500'}`}>Compliment</button>
-        <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'complaint' ? 'bg-white shadow text-[#8e2a2a]' : 'text-gray-500'}`}>Complaint</button>
+        <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === 'compliment' ? 'bg-white shadow text-[#595733]' : 'text-gray-500'}`}>Compliment</button>
+        <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === 'complaint' ? 'bg-white shadow text-[#8e2a2a]' : 'text-gray-500'}`}>Complaint</button>
+        <button type="button" onClick={() => setType('incident')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${type === 'incident' ? 'bg-white shadow text-[#003040]' : 'text-gray-500'}`}>Incident</button>
       </div>
 
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
-        <h3 className="font-bold text-gray-800 border-b pb-2">Guest Details</h3>
+        <h3 className="font-bold text-gray-800 border-b pb-2">{type === 'incident' ? 'Incident Location/Guest' : 'Guest Details'}</h3>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Guest Name / Room No.</label>
-          <input required value={form.guestName} onChange={e=>setForm({...form, guestName: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="e.g. Room 412 or John Doe" />
+          <label className="block text-sm font-medium text-gray-700 mb-1">{type === 'incident' ? 'Guest Name or Specific Area' : 'Guest Name / Room No.'}</label>
+          <input required value={form.guestName} onChange={e=>setForm({...form, guestName: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="e.g. Room 412 or Lobby Area" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -578,11 +621,24 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Specific Issue / Reason</label>
-          <input required value={form.reason} onChange={e=>setForm({...form, reason: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder={type === 'complaint' ? "Provide details to auto-classify escalation..." : "e.g. Great food"} />
+          <input required value={form.reason} onChange={e=>setForm({...form, reason: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder={type !== 'compliment' ? "Provide details to auto-classify escalation..." : "e.g. Great food"} />
         </div>
         
-        {type === 'complaint' && form.reason.trim().length > 2 && (
-          <div className={`p-4 rounded-xl border flex flex-col space-y-2 transition-all duration-300 ${SOP_FRAMEWORK[inferredSeverity].color}`}>
+        {/* RESTORED AI SUGGESTION BLOCK */}
+        <div className="bg-[#a0c8d2]/10 p-3 rounded-lg border border-[#a0c8d2]/30 flex items-start space-x-2 mt-2">
+          <Lightbulb className="text-[#003040] shrink-0 mt-0.5" size={16} />
+          <div>
+            <span className="block text-xs font-bold text-[#003040] mb-0.5">AI Recommended Action:</span>
+            <p className="text-[11px] text-[#003040]/80 leading-relaxed font-medium">
+              {type === 'complaint' ? SUGGESTED_RESOLUTIONS[form.department] 
+               : type === 'incident' ? SUGGESTED_INCIDENT_ACTIONS[form.department] 
+               : SUGGESTED_COMPLIMENT_ACTIONS[form.department]}
+            </p>
+          </div>
+        </div>
+        
+        {(type === 'complaint' || type === 'incident') && form.reason.trim().length > 2 && (
+          <div className={`p-4 rounded-xl border flex flex-col space-y-2 transition-all duration-300 mt-2 ${SOP_FRAMEWORK[inferredSeverity].color}`}>
             <div className="flex items-center justify-between border-b pb-1.5 border-black/5">
               <div className="flex items-center space-x-2">
                 {SOP_FRAMEWORK[inferredSeverity].icon}
@@ -612,7 +668,7 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
         <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full border border-[#a0c8d2] rounded-lg p-3 text-sm font-semibold text-[#003040] outline-none focus:ring-2 focus:ring-[#003040] bg-white" placeholder="Jane Doe" />
       </div>
 
-      {type === 'complaint' && (
+      {(type === 'complaint' || type === 'incident') && (
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
           <h3 className="font-bold text-gray-800 border-b pb-2">Ticket Resolution</h3>
           <div className="grid grid-cols-2 gap-4">
@@ -623,7 +679,7 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cost / Damage</label>
               <div className="relative w-full">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold"><Coins size={16} /></span>
                 <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-300 rounded-lg p-3 pl-9 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
@@ -660,6 +716,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     if (filter === 'resolved') return e.status === 'resolved';
     if (filter === 'compliment') return e.type === 'compliment';
     if (filter === 'complaint') return e.type === 'complaint';
+    if (filter === 'incident') return e.type === 'incident';
     return true;
   });
   
@@ -667,7 +724,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
   const displayConversionFactor = exchangeRates[currentISO] || 1;
 
   const getSLADetails = (entry) => {
-    if (entry.type !== 'complaint' || entry.status !== 'open') return { isBreached: false };
+    if ((entry.type !== 'complaint' && entry.type !== 'incident') || entry.status !== 'open') return { isBreached: false };
     const msElapsed = Date.now() - new Date(entry.date).getTime();
     const hoursElapsed = msElapsed / 3600000;
     return {
@@ -682,7 +739,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     if (emailType === 'manager') {
       to = entry.followUpEmail || "";
       sub = entry.severity === 'critical' ? `🚨 [CRITICAL GM ESCALATION]: ${entry.department}` : `[HOD NOTICE] OPEN TICKET: ${entry.department}`;
-      body = `SOP LEVEL: ${SOP_FRAMEWORK[entry.severity || 'quick'].label}\n\nGUEST/ROOM: ${entry.guestName}\nREASON: ${entry.reason}\nLOGGED BY: ${entry.handledBy}`;
+      body = `SOP LEVEL: ${SOP_FRAMEWORK[entry.severity || 'quick'].label}\n\nTYPE: ${entry.type.toUpperCase()}\nGUEST/ROOM: ${entry.guestName}\nREASON: ${entry.reason}\nLOGGED BY: ${entry.handledBy}`;
     } else if (emailType === 'escalation') {
       const sla = getSLADetails(entry);
       to = entry.followUpEmail || "";
@@ -703,7 +760,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     let msg = "";
     
     if (entry.severity === 'critical') {
-      msg = `🚨 *CRITICAL GM ACTION INTERVENTION* 🚨\n\nA critical incident requires executive review and physical service recovery action.\n\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}\n*Logged By:* ${entry.handledBy}`;
+      msg = `🚨 *CRITICAL GM ACTION INTERVENTION* 🚨\n\nA critical incident requires executive review and physical service recovery action.\n\n*Type:* ${entry.type.toUpperCase()}\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}\n*Logged By:* ${entry.handledBy}`;
     } else {
       msg = `⚠️ *SLA BREACH NOTIFICATION* ⚠️\n\nThis ticket has crossed its 2-hour threshold without finalization.\n\n*Overdue Time:* ${sla.hours}h ${sla.minutes}m\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}`;
     }
@@ -712,14 +769,14 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
       ? `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodeURIComponent(msg)}`
       : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
       
-    window.open(whatsappUrl, '_blank');
+    window.open(whatsappUrl, 'whatsapp_shared_tab');
     onMarkEmailSent(entry.id, 'escalation');
   };
 
   return (
     <div className="p-4 space-y-4">
       <div className="flex flex-wrap bg-gray-200 rounded-lg p-1 mb-4 shadow-inner gap-1">
-        {['all', 'open', 'resolved', 'complaint', 'compliment'].map(f => (
+        {['all', 'open', 'resolved', 'complaint', 'incident', 'compliment'].map(f => (
           <button key={f} onClick={() => setFilter(f)} className={`flex-1 min-w-[30%] py-1.5 text-xs font-bold rounded-md capitalize transition-all ${filter === f ? 'bg-white shadow text-[#003040]' : 'text-gray-500'}`}>{f}</button>
         ))}
       </div>
@@ -734,13 +791,15 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
 
           const leftBorderColor = sla.isBreached 
             ? '#8e2a2a' 
-            : (entry.type === 'compliment' 
-                ? '#595733' 
-                : activeSeverity === 'critical' 
-                  ? '#8e2a2a' 
-                  : activeSeverity === 'intermediate' 
-                    ? '#cf6231' 
-                    : '#595733');
+            : (entry.type === 'incident'
+                ? '#003040'
+                : entry.type === 'compliment' 
+                  ? '#595733' 
+                  : activeSeverity === 'critical' 
+                    ? '#8e2a2a' 
+                    : activeSeverity === 'intermediate' 
+                      ? '#cf6231' 
+                      : '#595733');
 
           return (
             <div 
@@ -759,9 +818,11 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
 
               <div className="flex justify-between items-start mb-2 mt-1">
                 <div className="flex items-center space-x-2">
-                  {entry.type === 'compliment' ? <ThumbsUp className="text-[#595733]" size={18} /> : <ThumbsDown className="text-[#8e2a2a]" size={18} />}
+                  {entry.type === 'compliment' && <ThumbsUp className="text-[#595733]" size={18} />}
+                  {entry.type === 'complaint' && <ThumbsDown className="text-[#8e2a2a]" size={18} />}
+                  {entry.type === 'incident' && <AlertTriangle className="text-[#003040]" size={18} />}
                   
-                  {entry.type === 'complaint' && (
+                  {(entry.type === 'complaint' || entry.type === 'incident') && (
                     <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${SOP_FRAMEWORK[activeSeverity].badge}`}>
                       {SOP_FRAMEWORK[activeSeverity].label}
                     </span>
@@ -778,7 +839,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
               <div className="grid grid-cols-2 gap-y-2 mt-3 text-sm text-gray-500">
                 <div>Department: <span className="font-semibold text-gray-800">{entry.department}</span></div>
                 <div>Logged By: <span className="font-semibold text-gray-800">{entry.handledBy}</span></div>
-                {entry.type === 'complaint' && <div className="col-span-2 flex items-center">Resolution Cost: <span className="font-semibold text-[#8e2a2a] flex items-center ml-1"><Coins size={14} className="mr-1" /> {localDisplayCost.toFixed(2)}</span></div>}
+                {(entry.type === 'complaint' || entry.type === 'incident') && <div className="col-span-2 flex items-center">Resolution Cost: <span className="font-semibold text-[#8e2a2a] flex items-center ml-1"><Coins size={14} className="mr-1" /> {localDisplayCost.toFixed(2)}</span></div>}
                 {entry.type === 'compliment' && entry.staffMentioned && <div className="col-span-2 text-[#cf6231] font-semibold flex items-center"><Award size={14} className="mr-1" /> Recognized: {entry.staffMentioned}</div>}
               </div>
 
