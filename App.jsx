@@ -1,24 +1,3 @@
-This is a brilliant operational pivot. The difference between a good hotel and an exceptional hotel is realizing that service recovery (or celebration) must happen *before* the guest checks out!
-
-To achieve this "intelligence" without forcing you to pay for external AI API keys, I have built **Dynamic Contextual String Interpolation** directly into the email engine.
-
-### 🧠 How the new Email Intelligence works:
-
-When a manager clicks "Email Guest", the app now actively reads the ticket and stitches the exact details into the Onomo-branded template.
-
-* It reads the **Department**.
-* It takes the **Reason** the staff member typed out and weaves it smoothly into the sentence.
-* It looks at the **Action Taken** dropdown and tells the guest exactly what was done to fix it.
-* If a staff member is praised, it dynamically adds a custom sentence promising to celebrate that specific staff member.
-* **In-House Focus:** Every email is now anchored in the present tense, letting the guest know you are watching over them *right now* while they are still in the building, rather than wishing them a safe journey home.
-
-Here is an example of what the app will now auto-generate for a complaint:
-
-> *"Dear Mr. Smith, ... Please accept our most sincere apologies that **the aircon was leaking water onto the floor**. ... To ensure your comfort, we have immediately **upgraded / changed your guest room**. Since you are still with us, your peace of mind is our highest priority..."*
-
-Copy this final, polished code block and replace your `App.jsx` on GitHub to push this intelligent email engine live!
-
-```react
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Home, 
@@ -1115,5 +1094,3 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     </div>
   );
 }
-
-```
