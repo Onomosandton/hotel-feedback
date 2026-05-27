@@ -1,41 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Home, 
-  PlusCircle, 
-  List, 
-  ThumbsUp, 
-  ThumbsDown, 
-  Coins, 
-  Award, 
-  Building2, 
-  Calendar,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Lightbulb,
-  FileText,
-  X,
-  Mail,
-  Send,
-  Download,
-  Camera,
-  MessageSquare,
-  Activity,
-  Phone,
-  Loader2,
-  RefreshCw,
-  Database,
-  Wifi,
-  WifiOff,
-  ShieldCheck,
-  Trophy,
-  Medal,
-  ShieldAlert,
-  UserCheck,
-  Users,
-  AlertTriangle,
-  ChevronDown,
-  Archive
+  Home, PlusCircle, List, ThumbsUp, ThumbsDown, Coins, Award, Calendar,
+  AlertCircle, CheckCircle, Clock, Lightbulb, FileText, Mail, Download,
+  MessageSquare, Activity, Phone, Loader2, RefreshCw, Database,
+  ShieldCheck, Trophy, Medal, ShieldAlert, UserCheck, Users, AlertTriangle,
+  ChevronDown, Archive, Sparkles, PartyPopper, Heart, ArrowLeft, Star
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -59,11 +28,271 @@ const db = getFirestore(app);
 
 const SHARED_APP_ID = "onomo_live_production_v1";
 
+// ==========================================
+// 1. MAIN UNIFIED PORTAL CONTROLLER
+// ==========================================
+export default function App() {
+  const [currentView, setCurrentView] = useState('portal'); // 'portal', 'feedback', 'recognition'
+
+  if (currentView === 'feedback') {
+    return <FeedbackApp onBackToPortal={() => setCurrentView('portal')} />;
+  }
+
+  if (currentView === 'recognition') {
+    return <RecognitionApp onBackToPortal={() => setCurrentView('portal')} />;
+  }
+
+  // --- START SCREEN UI ---
+  return (
+    <div className="flex flex-col h-screen w-full bg-[#f6ebda] font-sans relative overflow-hidden items-center justify-center p-4">
+      
+      <div className="text-center mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <h1 className="text-4xl md:text-5xl font-bold text-[#003040] mb-3 tracking-tight">Onomo Staff Portal</h1>
+        <p className="text-gray-500 font-medium md:text-lg">Where would you like to go today?</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl animate-in fade-in zoom-in-95 duration-500 delay-150">
+        
+        {/* APP 1: GUEST FEEDBACK */}
+        <div 
+          onClick={() => setCurrentView('feedback')}
+          className="bg-white border-2 border-[#003040] rounded-3xl p-8 md:p-12 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#003040] hover:text-white transition-all duration-300 shadow-xl hover:shadow-2xl hover:-translate-y-2 group"
+        >
+          <div className="bg-[#a0c8d2]/20 p-6 rounded-full mb-6 group-hover:bg-white/10 transition-colors">
+            <Building2 size={64} className="text-[#003040] group-hover:text-white transition-colors" />
+          </div>
+          <h2 className="text-2xl font-bold mb-3 group-hover:text-white text-[#003040]">Guest Feedback</h2>
+          <p className="text-sm font-medium opacity-70 group-hover:opacity-90 max-w-[250px]">
+            Log complaints, incidents, and praises. Trigger escalations and track daily operations.
+          </p>
+        </div>
+
+        {/* APP 2: TEAM RECOGNITION */}
+        <div 
+          onClick={() => setCurrentView('recognition')}
+          className="bg-gradient-to-br from-[#ffb131] to-[#f18a00] border-2 border-[#f18a00] rounded-3xl p-8 md:p-12 flex flex-col items-center justify-center text-center cursor-pointer hover:from-[#f18a00] hover:to-[#cf6231] transition-all duration-300 shadow-xl hover:shadow-2xl hover:-translate-y-2 text-white group"
+        >
+          <div className="bg-white/20 p-6 rounded-full mb-6 group-hover:scale-110 transition-transform duration-300">
+            <PartyPopper size={64} className="text-white drop-shadow-md" />
+          </div>
+          <h2 className="text-2xl font-bold mb-3 drop-shadow-sm">Team Cheers</h2>
+          <p className="text-sm font-medium opacity-90 max-w-[250px]">
+            Recognize your colleagues, celebrate the O-Smile, and crown the Employee of the Month!
+          </p>
+        </div>
+
+      </div>
+      
+      <div className="absolute bottom-8 opacity-40 flex items-center text-xs font-bold text-[#003040] tracking-widest uppercase">
+        <ShieldCheck size={14} className="mr-1.5" /> Secure Live Production Environment
+      </div>
+    </div>
+  );
+}
+
+
+// ==========================================
+// 2. TEAM RECOGNITION APP (FUN & FUNKY)
+// ==========================================
+function RecognitionApp({ onBackToPortal }) {
+  const [activeTab, setActiveTab] = useState('give'); // 'give', 'board'
+  const [entries, setEntries] = useState([]);
+  const [user, setUser] = useState(null);
+  const [toast, setToast] = useState(null);
+  
+  // ALIGNED TO ONOMO CORE VALUES
+  const CORE_VALUES = [
+    'The Authentic O-Smile (Proudly Diverse) 🌍',
+    'Going the Extra Mile (Drive) 🚀',
+    'The Ultimate Team Player (Respect) 🤝',
+    'Brilliant Problem Solver (Audacity) 💡',
+    'Always Having My Back (Trust) 🛡️'
+  ];
+
+  const [form, setForm] = useState({
+    recipient: '',
+    coreValue: CORE_VALUES[0],
+    message: '',
+    sender: ''
+  });
+
+  const showToast = (message) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  useEffect(() => {
+    onAuthStateChanged(auth, setUser);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const entriesRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'recognition_entries');
+    const unsubscribe = onSnapshot(entriesRef, (snapshot) => {
+      const loadedEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setEntries(loadedEntries);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  const submitCheer = async (e) => {
+    e.preventDefault();
+    if (!user) return showToast('Connection error.');
+    try {
+      const entriesRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'recognition_entries');
+      await addDoc(entriesRef, { 
+        ...form, 
+        date: new Date().toISOString(),
+        userId: user.uid 
+      });
+      setForm({ recipient: '', coreValue: CORE_VALUES[0], message: '', sender: '' });
+      setActiveTab('board');
+      showToast('🎉 Cheer sent successfully!');
+    } catch (error) {
+      showToast(`Error: ${error.message}`);
+    }
+  };
+
+  // Leaderboard Math (This Month Only)
+  const leaderboard = useMemo(() => {
+    const listMap = {};
+    const now = new Date();
+    
+    entries.forEach(e => {
+      const eDate = new Date(e.date);
+      if (eDate.getMonth() === now.getMonth() && eDate.getFullYear() === now.getFullYear()) {
+        const name = e.recipient.trim();
+        if (name) listMap[name] = (listMap[name] || 0) + 1;
+      }
+    });
+
+    return Object.entries(listMap)
+      .map(([name, points]) => ({ name, points }))
+      .sort((a, b) => b.points - a.points);
+  }, [entries]);
+
+  return (
+    <div className="flex flex-col h-screen w-full bg-[#fffdf9] font-sans relative overflow-hidden">
+      {toast && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-[#f18a00] text-white px-6 py-4 rounded-full shadow-2xl z-50 text-sm font-bold flex items-center space-x-2 animate-bounce">
+          <Sparkles size={20} /><span>{toast}</span>
+        </div>
+      )}
+
+      {/* FUN HEADER */}
+      <header className="bg-gradient-to-r from-[#ffb131] to-[#f18a00] text-white px-4 md:px-8 py-4 shadow-lg z-20 w-full flex justify-between items-center">
+        <div className="flex items-center space-x-4">
+          <button onClick={onBackToPortal} className="bg-white/20 p-2 rounded-full hover:bg-white/40 transition-colors">
+            <ArrowLeft size={20} className="text-white" />
+          </button>
+          <div>
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight flex items-center">
+              Team Cheers <Sparkles size={20} className="ml-2" />
+            </h1>
+            <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-white/80">Recognize Greatness</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto pb-24 relative w-full p-4 md:p-8">
+        <div className="max-w-3xl mx-auto space-y-6">
+          
+          {/* TAB TOGGLES */}
+          <div className="flex bg-orange-50 rounded-2xl p-2 shadow-inner border border-orange-100">
+            <button onClick={() => setActiveTab('give')} className={`flex-1 py-3 text-sm md:text-base font-bold rounded-xl transition-all ${activeTab === 'give' ? 'bg-white shadow-md text-[#f18a00]' : 'text-orange-900/50 hover:bg-orange-100'}`}>Give a Cheer</button>
+            <button onClick={() => setActiveTab('board')} className={`flex-1 py-3 text-sm md:text-base font-bold rounded-xl transition-all ${activeTab === 'board' ? 'bg-white shadow-md text-[#f18a00]' : 'text-orange-900/50 hover:bg-orange-100'}`}>The Leaderboard</button>
+          </div>
+
+          {activeTab === 'give' && (
+            <form onSubmit={submitCheer} className="bg-white p-6 md:p-8 rounded-3xl border border-orange-100 shadow-xl space-y-6 animate-in zoom-in-95 duration-300">
+              <div className="text-center mb-6">
+                <Heart size={48} className="text-[#cf6231] mx-auto mb-2" />
+                <h2 className="text-2xl font-extrabold text-gray-800">Who made you smile today?</h2>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Colleague's Name</label>
+                <input required value={form.recipient} onChange={e=>setForm({...form, recipient: e.target.value})} className="w-full border-2 border-orange-100 rounded-2xl p-4 text-lg font-bold outline-none focus:border-[#f18a00] bg-orange-50/50 transition-colors" placeholder="Who are you cheering for?" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Reason for Cheer (Core Value)</label>
+                <div className="relative">
+                  <select value={form.coreValue} onChange={e=>setForm({...form, coreValue: e.target.value})} className="w-full border-2 border-orange-100 rounded-2xl p-4 text-sm md:text-lg font-bold outline-none focus:border-[#f18a00] bg-orange-50/50 transition-colors appearance-none cursor-pointer text-[#cf6231]">
+                    {CORE_VALUES.map(v => <option key={v}>{v}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-400 pointer-events-none" size={24} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Leave a nice message</label>
+                <textarea required value={form.message} onChange={e=>setForm({...form, message: e.target.value})} rows="3" className="w-full border-2 border-orange-100 rounded-2xl p-4 text-base outline-none focus:border-[#f18a00] bg-orange-50/50 transition-colors resize-none" placeholder="Thank you for always..." />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">From (Your Name)</label>
+                <input required value={form.sender} onChange={e=>setForm({...form, sender: e.target.value})} className="w-full border-2 border-orange-100 rounded-2xl p-4 text-base outline-none focus:border-[#f18a00] bg-white transition-colors" placeholder="Your name" />
+              </div>
+
+              <button type="submit" className="w-full bg-gradient-to-r from-[#ffb131] to-[#f18a00] text-white font-black text-xl py-5 rounded-2xl hover:scale-[1.02] transition-transform shadow-lg flex items-center justify-center">
+                <PartyPopper size={24} className="mr-3" /> Send Cheer!
+              </button>
+            </form>
+          )}
+
+          {activeTab === 'board' && (
+            <div className="space-y-6 animate-in fade-in duration-500">
+              {/* THE CROWN */}
+              {leaderboard.length > 0 && (
+                <div className="bg-gradient-to-b from-[#ffb131] to-[#f18a00] rounded-3xl p-8 text-center text-white shadow-2xl relative overflow-hidden">
+                  <Star size={120} className="absolute -top-10 -right-10 text-white/20 rotate-45" />
+                  <Trophy size={64} className="mx-auto mb-4 drop-shadow-md text-yellow-200" />
+                  <h3 className="text-sm font-bold tracking-widest uppercase mb-1 opacity-90">Current Employee of the Month</h3>
+                  <h2 className="text-5xl font-black mb-2">{leaderboard[0].name}</h2>
+                  <div className="inline-block bg-white/20 px-6 py-2 rounded-full font-bold text-lg backdrop-blur-sm">
+                    {leaderboard[0].points} Cheers Received
+                  </div>
+                </div>
+              )}
+
+              {/* THE LIST */}
+              <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xl space-y-4">
+                <h3 className="font-bold text-xl text-gray-800 border-b border-gray-100 pb-3 flex items-center">
+                   <Activity className="mr-2 text-[#cf6231]" size={20} /> This Month's Ranking
+                </h3>
+                {leaderboard.map((member, i) => (
+                  <div key={member.name} className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100/50">
+                    <div className="flex items-center space-x-4">
+                      <span className={`text-2xl font-black w-8 text-center ${i===0?'text-[#f18a00]':i===1?'text-slate-400':i===2?'text-[#cf6231]':'text-gray-300'}`}>#{i+1}</span>
+                      <span className="font-bold text-lg text-gray-800">{member.name}</span>
+                    </div>
+                    <span className="bg-white text-[#f18a00] font-black px-4 py-2 rounded-xl shadow-sm border border-orange-100 flex items-center">
+                       {member.points} <Sparkles size={14} className="ml-1.5" />
+                    </span>
+                  </div>
+                ))}
+                {leaderboard.length === 0 && (
+                   <div className="text-center py-10 text-gray-400 font-bold">No cheers yet this month. Be the first!</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+
+// ==========================================
+// 3. GUEST FEEDBACK APP (SERIOUS & OPERATIONAL)
+// ==========================================
+// Constants needed specific to Feedback
 const DEPARTMENTS = [
   'Front Desk', 'Housekeeping', 'Food & Beverage', 'Maintenance', 'Concierge', 'Spa & Wellness', 'Valet/Parking', 'Security/General'
 ];
 
-// --- DYNAMIC ACTION OPTIONS ---
 const COMPLAINT_ACTIONS = [
   'apologized and resolved immediately',
   'provided a complimentary F&B voucher',
@@ -84,13 +313,9 @@ const COMPLIMENT_ACTIONS = [
   'Sent follow-up appreciation note'
 ];
 
-const CURRENCY_MAP = {
-  '$': 'USD', '€': 'EUR', '£': 'GBP', 'R': 'ZAR'
-};
-
+const CURRENCY_MAP = { '$': 'USD', '€': 'EUR', '£': 'GBP', 'R': 'ZAR' };
 const HOD_EMAIL_LIST = "nicolene.claassen@onomohotel.com;chef.sandton@onomohotel.com;rdm.sandton@onomohotel.com;afom.sandton@onomohotel.com;fom.sandton@onomohotel.com;maintenance.sandton@onomohotel.com;hk.sandton@onomohotel.com;restaurant.sandton@onomohotel.com";
 
-// --- AI DEPARTMENTAL SUGGESTION DICTIONARIES ---
 const SUGGESTED_RESOLUTIONS = {
   'Front Desk': 'Listen actively, apologize sincerely, and offer a complimentary room upgrade or late checkout if appropriate.',
   'Housekeeping': 'Dispatch housekeeping immediately to rectify. Apologize and offer a complimentary amenity (e.g., fruit basket).',
@@ -124,7 +349,6 @@ const SUGGESTED_INCIDENT_ACTIONS = {
   'Security/General': 'Follow standard emergency protocols. Secure the area, assist guests, and alert the General Manager.'
 };
 
-// --- SOP ESCALATION DIRECTIVES ---
 const SOP_FRAMEWORK = {
   quick: {
     label: 'Quick Resolve',
@@ -154,12 +378,8 @@ const SOP_FRAMEWORK = {
 
 const determineSOPSeverity = (text) => {
   const lower = (text || "").toLowerCase();
-  if (/(fire|flood|injury|theft|stolen|vip|gm|general manager|emergency|medical|danger|police|assault|broken lock|power out|no water|furious|unacceptable|terrible|worst|shouting|legal)/.test(lower)) {
-    return 'critical';
-  }
-  if (/(leak|supervisor|slow|rude|dirty|manager|upgrade|delay|wait|noise|loud|hot water|broken|aircon|ac|tv|fridge|card|key|smell|stain|infestation|bug|pest)/.test(lower)) {
-    return 'intermediate';
-  }
+  if (/(fire|flood|injury|theft|stolen|vip|gm|general manager|emergency|medical|danger|police|assault|broken lock|power out|no water|furious|unacceptable|terrible|worst|shouting|legal)/.test(lower)) return 'critical';
+  if (/(leak|supervisor|slow|rude|dirty|manager|upgrade|delay|wait|noise|loud|hot water|broken|aircon|ac|tv|fridge|card|key|smell|stain|infestation|bug|pest)/.test(lower)) return 'intermediate';
   return 'quick';
 };
 
@@ -172,7 +392,7 @@ const analyzeSentiment = (text) => {
   return { label: 'Neutral', emoji: '😐', color: 'text-gray-700 bg-gray-100 border-gray-200' };
 };
 
-export default function App() {
+function FeedbackApp({ onBackToPortal }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [entries, setEntries] = useState([]);
   const [currency, setCurrency] = useState('$');
@@ -203,22 +423,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (error) {
-        setCloudError(`Auth Failed: ${error.message}`);
-      }
-    };
-    initAuth();
-    return onAuthStateChanged(auth, setUser);
+    onAuthStateChanged(auth, setUser);
   }, []);
 
   useEffect(() => {
     if (!user) return; 
-
     const entriesRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries');
-    
     const unsubscribe = onSnapshot(entriesRef, 
       (snapshot) => {
         const loadedEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -233,17 +443,12 @@ export default function App() {
         setLoading(false);
       }
     );
-
     return () => unsubscribe();
   }, [user]);
 
   const addEntry = async (newEntry, openWhatsAppTrigger) => {
     if (!user) return showToast('Error: Connection pending...');
-    
-    if (openWhatsAppTrigger) {
-      openWhatsAppTrigger();
-    }
-
+    if (openWhatsAppTrigger) openWhatsAppTrigger();
     try {
       const entriesRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries');
       await addDoc(entriesRef, { ...newEntry, userId: user.uid });
@@ -288,7 +493,6 @@ export default function App() {
 
   const archiveResolvedTickets = async () => {
     if (!window.confirm("Perform Monthly Reset? This will move all currently RESOLVED tickets into the Archive tab, clearing your active feeds for the new month.")) return;
-    
     try {
       entries.forEach(e => {
         if (e.status === 'resolved' && !e.isArchived) {
@@ -320,14 +524,20 @@ export default function App() {
         </div>
       )}
 
-      <header className="bg-[#003040] text-white px-4 md:px-8 py-4 shadow-md z-20 w-full flex justify-between items-center">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-wide">Onomo Feedback Tracker</h1>
-          <div className="flex items-center text-[10px] md:text-xs text-[#a0c8d2] font-semibold tracking-wider mt-0.5 md:mt-1">
-            <RefreshCw size={10} className="mr-1.5 animate-spin" /> Live Sync Active
+      {/* HEADER WITH UNIFIED PORTAL BACK BUTTON */}
+      <header className="bg-[#003040] text-white px-4 md:px-6 py-4 shadow-md z-20 w-full flex justify-between items-center">
+        <div className="flex items-center space-x-3">
+          <button onClick={onBackToPortal} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors" title="Back to Portal">
+            <ArrowLeft size={18} className="text-white" />
+          </button>
+          <div>
+            <h1 className="text-lg md:text-xl font-bold tracking-wide">Guest Tracker</h1>
+            <div className="flex items-center text-[9px] md:text-[10px] text-[#a0c8d2] font-semibold tracking-wider mt-0.5">
+              <RefreshCw size={8} className="mr-1.5 animate-spin" /> Live Sync Active
+            </div>
           </div>
         </div>
-        <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="bg-[#003040]/80 text-white border border-[#a0c8d2]/20 rounded p-1.5 md:p-2 text-xs md:text-sm outline-none focus:ring-2 focus:ring-[#a0c8d2] cursor-pointer font-semibold shadow-sm hover:bg-[#003040]">
+        <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="bg-[#003040]/80 text-white border border-[#a0c8d2]/20 rounded p-1.5 text-xs outline-none focus:ring-2 focus:ring-[#a0c8d2] cursor-pointer font-semibold shadow-sm hover:bg-[#003040]">
           <option value="$">USD ($)</option><option value="€">EUR (€)</option><option value="£">GBP (£)</option><option value="R">ZAR (R)</option>
         </select>
       </header>
@@ -343,46 +553,33 @@ export default function App() {
           <nav className="flex-1 px-4 py-8 space-y-3">
             {['dashboard', 'add', 'history'].map((tab) => (
               <button key={tab} onClick={() => { setActiveTab(tab); if(tab==='history') setHistoryFilter('all'); }} className={`flex items-center w-full px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === tab ? 'text-[#f18a00] bg-[#f18a00]/10 font-bold shadow-sm' : 'text-gray-500 hover:text-[#003040] hover:bg-gray-50 font-medium'}`}>
-                {tab === 'dashboard' ? <Home size={20} className="mr-3 shrink-0" /> : tab === 'add' ? <PlusCircle size={20} className="mr-3 shrink-0" /> : <List size={20} className="mr-3 shrink-0" />}
+                {tab === 'dashboard' ? <Activity size={20} className="mr-3 shrink-0" /> : tab === 'add' ? <PlusCircle size={20} className="mr-3 shrink-0" /> : <List size={20} className="mr-3 shrink-0" />}
                 <span className="text-sm capitalize">{tab === 'add' ? 'New Entry' : tab}</span>
               </button>
             ))}
           </nav>
-          
-          <div className="p-4 m-4 bg-slate-900 text-white/60 text-[10px] rounded-xl font-mono flex flex-col space-y-2 border border-slate-800 shadow-inner">
-            <div className="flex items-center space-x-1.5 border-b border-white/10 pb-2"><ShieldCheck size={12} className={user ? "text-green-400" : "text-amber-400"} /><span className="uppercase font-bold text-white/90 tracking-widest">System Link</span></div>
-            <div className="flex justify-between items-center pt-1"><span>UID: <span className="text-blue-300">{user?.uid?.substring(0,6) || "..."}</span></span><span>{user ? "ONLINE" : "ERROR"}</span></div>
-            <div className="flex justify-between items-center"><span>SYNC:</span><span className="text-white font-bold">{lastSync || "..."}</span></div>
-          </div>
         </aside>
 
         <main className="flex-1 overflow-y-auto pb-24 md:pb-8 relative w-full">
-          {activeTab === 'dashboard' && <Dashboard entries={entries} currency={currency} exchangeRates={exchangeRates} onOpenTicketsClick={() => { setHistoryFilter('open'); setActiveTab('history'); }} onStatClick={(filter) => { setHistoryFilter(filter); setActiveTab('history'); }} onArchiveMonth={archiveResolvedTickets} />}
-          {activeTab === 'add' && <AddEntryForm onSave={addEntry} currency={currency} exchangeRates={exchangeRates} />}
-          {activeTab === 'history' && <History entries={entries} onResolve={resolveEntry} onAddComment={addComment} onMarkEmailSent={markEmailSent} currency={currency} exchangeRates={exchangeRates} filter={historyFilter} setFilter={setHistoryFilter} ticker={timeTicker} />}
+          {activeTab === 'dashboard' && <FeedbackDashboard entries={entries} currency={currency} exchangeRates={exchangeRates} onOpenTicketsClick={() => { setHistoryFilter('open'); setActiveTab('history'); }} onStatClick={(filter) => { setHistoryFilter(filter); setActiveTab('history'); }} onArchiveMonth={archiveResolvedTickets} />}
+          {activeTab === 'add' && <FeedbackAddForm onSave={addEntry} currency={currency} exchangeRates={exchangeRates} />}
+          {activeTab === 'history' && <FeedbackHistory entries={entries} onResolve={resolveEntry} onAddComment={addComment} onMarkEmailSent={markEmailSent} currency={currency} exchangeRates={exchangeRates} filter={historyFilter} setFilter={setHistoryFilter} ticker={timeTicker} />}
         </main>
       </div>
 
       <nav className="md:hidden bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around p-2 z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
         {['dashboard', 'add', 'history'].map((tab) => (
           <button key={tab} onClick={() => { setActiveTab(tab); if(tab==='history') setHistoryFilter('all'); }} className={`flex flex-col items-center p-2 rounded-lg w-1/3 transition-colors ${activeTab === tab ? 'text-[#f18a00] bg-[#f18a00]/10' : 'text-gray-500 hover:text-[#003040]'}`}>
-            {tab === 'dashboard' ? <Home size={24} /> : tab === 'add' ? <PlusCircle size={24} /> : <List size={24} />}
-            <span className="text-xs mt-1 font-semibold capitalize">{tab === 'add' ? 'New Entry' : tab}</span>
+            {tab === 'dashboard' ? <Activity size={24} /> : tab === 'add' ? <PlusCircle size={24} /> : <List size={24} />}
+            <span className="text-xs mt-1 font-semibold capitalize">{tab === 'add' ? 'New' : tab}</span>
           </button>
         ))}
       </nav>
-      
-      <div className="md:hidden absolute bottom-[72px] left-0 w-full bg-slate-900 text-white/60 px-3 py-1 text-[8px] font-mono flex justify-between border-t border-white/10 z-20 pointer-events-none">
-        <span>Production Status: Live</span>
-        {lastSync && <span>Sync: {lastSync}</span>}
-      </div>
     </div>
   );
 }
 
-// --- COMPONENTS ---
-
-function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onStatClick, onArchiveMonth }) {
+function FeedbackDashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onStatClick, onArchiveMonth }) {
   const [range, setRange] = useState('month'); 
   
   const filtered = useMemo(() => {
@@ -400,20 +597,6 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
       return eDate >= cutoff;
     });
   }, [entries, range]);
-
-  const staffLeaderboard = useMemo(() => {
-    const listMap = {};
-    filtered.forEach(e => {
-      if (e.type === 'compliment' && e.staffMentioned) {
-        const cleanedName = e.staffMentioned.trim();
-        if (cleanedName) listMap[cleanedName] = (listMap[cleanedName] || 0) + 1;
-      }
-    });
-    return Object.entries(listMap)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-  }, [filtered]);
 
   const stats = useMemo(() => {
     let comps = 0, complaints = 0, incidents = 0, cost = 0, open = 0;
@@ -435,40 +618,9 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
     return { comps, complaints, incidents, cost, open };
   }, [filtered, currency, exchangeRates]);
 
-  const trendData = useMemo(() => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push({
-        date: d.toDateString(),
-        label: d.toLocaleDateString('en-US', { weekday: 'short' }),
-        complaints: 0,
-        compliments: 0
-      });
-    }
-
-    filtered.forEach(e => {
-      const eDate = new Date(e.date).toDateString();
-      const dayMatch = days.find(d => d.date === eDate);
-      if (dayMatch) {
-        if (e.type === 'complaint' || e.type === 'incident') dayMatch.complaints++;
-        if (e.type === 'compliment') dayMatch.compliments++;
-      }
-    });
-
-    const maxVal = Math.max(...days.map(d => Math.max(d.complaints, d.compliments, 1)));
-    return { days, maxVal };
-  }, [filtered]);
-
   const exportCSV = () => {
-    const headers = ['Type', 'Date', 'Guest/Location', 'Guest Email', 'Guest Phone', 'Department', 'Severity', 'Reason', 'Action', 'Base Cost (USD)', 'Status', 'Handled By', 'Sentiment'];
-    const rows = filtered.map(e => {
-      const sentimentStr = e.sentiment ? e.sentiment.label : 'N/A';
-      const safeReason = e.reason ? String(e.reason).replace(/"/g, '""') : '';
-      const safeAction = e.actionTaken ? String(e.actionTaken).replace(/"/g, '""') : '';
-      return `"${e.type}","${new Date(e.date).toLocaleDateString()}","${e.guestName}","${e.guestEmail || ''}","${e.guestPhone || ''}","${e.department}","${e.severity || 'quick'}","${safeReason}","${safeAction}","${e.cost || 0}","${e.status || 'resolved'}","${e.handledBy || ''}","${sentimentStr}"`;
-    });
+    const headers = ['Type', 'Date', 'Guest/Location', 'Department', 'Severity', 'Reason', 'Action', 'Base Cost (USD)', 'Status', 'Handled By', 'Sentiment'];
+    const rows = filtered.map(e => `"${e.type}","${new Date(e.date).toLocaleDateString()}","${e.guestName}","${e.department}","${e.severity || 'quick'}","${(e.reason||'').replace(/"/g, '""')}","${(e.actionTaken||'').replace(/"/g, '""')}","${e.cost || 0}","${e.status || 'resolved'}","${e.handledBy || ''}","${e.sentiment?.label||'N/A'}"`);
     const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -482,151 +634,47 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
   const generateEODReport = () => {
     const todayStr = new Date().toDateString();
     const todaysEntries = entries.filter(e => new Date(e.date).toDateString() === todayStr);
-
-    let eodComps = 0, eodComplaints = 0, eodIncidents = 0, eodCost = 0, eodOpen = 0;
-    const targetISO = CURRENCY_MAP[currency] || 'USD';
-    const currentViewMultiplier = exchangeRates[targetISO] || 1;
     let detailsText = "";
-
     todaysEntries.forEach((e, i) => {
-      if (e.type === 'compliment') eodComps++;
-      else if (e.type === 'incident') {
-        eodIncidents++;
-        eodCost += ((Number(e.cost) || 0) * currentViewMultiplier);
-        if (e.status === 'open') eodOpen++;
-      } else {
-        eodComplaints++;
-        eodCost += ((Number(e.cost) || 0) * currentViewMultiplier);
-        if (e.status === 'open') eodOpen++;
-      }
-      
       const statusText = (e.type === 'complaint' || e.type === 'incident') ? ` | Status: ${e.status.toUpperCase()}` : '';
       detailsText += `${i + 1}. [${e.type.toUpperCase()}] ${e.department} - ${e.guestName}\n   Issue/Reason: ${e.reason}${statusText}\n\n`;
     });
-
     const subject = `Daily Hotel Feedback Report - ${new Date().toLocaleDateString()}`;
-    const body = `HOTEL FEEDBACK EOD REPORT\nDate: ${new Date().toLocaleDateString()}\n\n--- TODAY'S SUMMARY ---\nCompliments: ${eodComps}\nComplaints: ${eodComplaints}\nIncidents: ${eodIncidents}\nTickets Still Open: ${eodOpen}\nResolution Cost: ${currency}${eodCost.toFixed(2)}\n\n--- DETAILED LOGS ---\n${detailsText || "No feedback logged today."}\n\nGenerated by Onomo Feedback Tracker`;
-
+    const body = `HOTEL FEEDBACK EOD REPORT\nDate: ${new Date().toLocaleDateString()}\n\n--- DETAILED LOGS ---\n${detailsText || "No feedback logged today."}\n\nGenerated by Onomo Feedback Tracker`;
     window.location.href = `mailto:${HOD_EMAIL_LIST}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   return (
     <div className="p-4 md:p-8 space-y-4 md:space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-3 md:space-y-0 bg-white p-3 md:p-4 rounded-xl border border-gray-200 shadow-sm">
         <div className="flex items-center space-x-3 w-full md:w-auto">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest hidden md:block">Filter:</span>
-          <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-gray-50 border border-gray-300 text-gray-800 text-sm rounded-lg focus:ring-[#003040] focus:border-[#003040] block p-2 pr-10 font-medium w-full md:w-auto appearance-none relative">
+          <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-gray-50 border border-gray-300 text-gray-800 text-sm rounded-lg focus:ring-[#003040] block p-2 pr-10 w-full md:w-auto">
             <option value="1">Today</option><option value="7">Last 7 Days</option><option value="month">This Month</option><option value="all">All Time</option>
           </select>
         </div>
-        
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
-          <button onClick={onArchiveMonth} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-gray-200 text-gray-700 px-3 py-2.5 rounded-lg font-semibold hover:bg-gray-300 transition-colors shadow-sm" title="Archive resolved tickets">
-            <Archive size={16} className="mr-1.5" /> Archive Month
-          </button>
-          <button onClick={generateEODReport} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#cf6231] text-white px-3 py-2.5 rounded-lg font-semibold hover:bg-[#cf6231]/90 transition-colors shadow-sm">
-            <Mail size={16} className="mr-1.5" /> EOD Report
-          </button>
-          <button onClick={exportCSV} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#003040] text-white px-3 py-2.5 rounded-lg font-semibold hover:bg-[#003040]/90 transition-colors shadow-sm">
-            <Download size={16} className="mr-1.5" /> Export CSV
-          </button>
+          <button onClick={onArchiveMonth} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-gray-200 text-gray-700 px-3 py-2.5 rounded-lg font-semibold hover:bg-gray-300 shadow-sm"><Archive size={16} className="mr-1.5" /> Archive Month</button>
+          <button onClick={generateEODReport} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#cf6231] text-white px-3 py-2.5 rounded-lg font-semibold hover:bg-[#cf6231]/90 shadow-sm"><Mail size={16} className="mr-1.5" /> EOD Report</button>
+          <button onClick={exportCSV} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#003040] text-white px-3 py-2.5 rounded-lg font-semibold hover:bg-[#003040]/90 shadow-sm"><Download size={16} className="mr-1.5" /> CSV</button>
         </div>
       </div>
       
       <div className="grid grid-cols-3 gap-2 md:gap-6">
-        <StatBox label="Praises" value={stats.comps} color="text-[#595733] bg-[#595733]/10 border-[#595733]/20 hover:bg-[#595733]/20 cursor-pointer transition-colors" onClick={() => onStatClick('compliment')} />
-        <StatBox label="Complaints" value={stats.complaints} color="text-[#8e2a2a] bg-[#8e2a2a]/10 border-[#8e2a2a]/20 hover:bg-[#8e2a2a]/20 cursor-pointer transition-colors" onClick={() => onStatClick('complaint')} />
-        <StatBox label="Incidents" value={stats.incidents} color="text-[#003040] bg-[#a0c8d2]/30 border-[#a0c8d2]/40 hover:bg-[#a0c8d2]/50 cursor-pointer transition-colors" onClick={() => onStatClick('incident')} />
+        <div onClick={()=>onStatClick('compliment')} className="bg-[#595733]/10 border-[#595733]/20 text-[#595733] p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center min-h-[100px] cursor-pointer hover:bg-[#595733]/20"><span className="text-3xl md:text-4xl font-bold mb-2">{stats.comps}</span><span className="text-xs md:text-sm font-semibold uppercase tracking-widest">Praises</span></div>
+        <div onClick={()=>onStatClick('complaint')} className="bg-[#8e2a2a]/10 border-[#8e2a2a]/20 text-[#8e2a2a] p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center min-h-[100px] cursor-pointer hover:bg-[#8e2a2a]/20"><span className="text-3xl md:text-4xl font-bold mb-2">{stats.complaints}</span><span className="text-xs md:text-sm font-semibold uppercase tracking-widest">Complaints</span></div>
+        <div onClick={()=>onStatClick('incident')} className="bg-[#a0c8d2]/30 border-[#a0c8d2]/40 text-[#003040] p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center min-h-[100px] cursor-pointer hover:bg-[#a0c8d2]/50"><span className="text-3xl md:text-4xl font-bold mb-2">{stats.incidents}</span><span className="text-xs md:text-sm font-semibold uppercase tracking-widest">Incidents</span></div>
       </div>
       
       <div className="grid grid-cols-2 gap-4 md:gap-6">
-        <MetricCard label="Tickets Open" value={stats.open} color="bg-white border-red-200 text-[#8e2a2a]" onClick={onOpenTicketsClick} icon={<AlertCircle size={18} className="text-[#8e2a2a]" />} />
-        <MetricCard label="Total Resolution Cost" value={`${currency}${stats.cost.toFixed(2)}`} color="bg-white border-gray-200 text-[#003040]" icon={<Coins size={18} className="text-[#a0c8d2]" />} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <div className="flex flex-col">
-          <h2 className="text-lg md:text-xl font-bold text-[#003040] mb-3 flex items-center">
-            <Trophy size={20} className="mr-2 text-[#ffb131]" /> Staff Performance Board
-          </h2>
-          <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 space-y-4 shadow-sm flex-1">
-            {staffLeaderboard.map((member, index) => {
-              const medalColors = ["text-[#ffb131]", "text-slate-400", "text-[#cf6231]"];
-              return (
-                <div key={member.name} className="flex justify-between items-center text-sm md:text-base border-b border-gray-100 pb-3 last:border-0 last:pb-0">
-                  <div className="flex items-center space-x-3 md:space-x-4 truncate">
-                    <span className="w-6 md:w-8 text-center font-bold">
-                      {index < 3 ? <Medal size={22} className={medalColors[index]} /> : <span className="text-gray-400">{index + 1}</span>}
-                    </span>
-                    <span className="font-semibold text-gray-800 truncate">{member.name}</span>
-                  </div>
-                  <span className="bg-[#ffb131]/10 text-[#cf6231] font-bold text-xs md:text-sm px-3 md:px-4 py-1.5 rounded-full flex items-center">
-                    <ThumbsUp size={14} className="mr-1.5" /> {member.count} Praises
-                  </span>
-                </div>
-              );
-            })}
-            {staffLeaderboard.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-8 text-gray-400 opacity-60">
-                 <Trophy size={48} className="mb-3" />
-                 <p className="italic text-sm">No staff mentions captured yet.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col">
-          <h2 className="text-lg md:text-xl font-bold text-[#003040] mb-3 flex items-center">
-            <Activity size={20} className="mr-2 text-[#a0c8d2]" /> 7-Day Issue Trend
-          </h2>
-          <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 flex-1 flex flex-col justify-end min-h-[220px] shadow-sm">
-            <div className="flex items-end justify-between space-x-1 md:space-x-2 h-40 relative">
-              <div className="absolute top-0 right-0 flex flex-col items-end space-y-1 opacity-60 z-10 bg-white/50 p-1">
-                 <span className="text-[10px] font-bold text-[#595733] flex items-center"><span className="w-2 h-2 bg-[#595733] mr-1 rounded-sm"></span> Praises</span>
-                 <span className="text-[10px] font-bold text-[#8e2a2a] flex items-center"><span className="w-2 h-2 bg-[#8e2a2a] mr-1 rounded-sm"></span> Issues</span>
-              </div>
-
-              {trendData.days.map((day, i) => (
-                <div key={i} className="flex flex-col items-center flex-1 group h-full justify-end pb-6 relative">
-                  <div className="flex w-full justify-center items-end space-x-0.5 h-full">
-                    <div className="w-1/2 bg-[#595733] rounded-t-sm transition-all hover:opacity-80" style={{ height: `${(day.compliments / trendData.maxVal) * 100}%` }}></div>
-                    <div className="w-1/2 bg-[#8e2a2a] rounded-t-sm transition-all hover:opacity-80" style={{ height: `${(day.complaints / trendData.maxVal) * 100}%` }}></div>
-                  </div>
-                  <span className="text-[10px] md:text-xs text-gray-500 font-medium absolute bottom-0">{day.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
+        <div onClick={onOpenTicketsClick} className="bg-white border-red-200 text-[#8e2a2a] p-4 md:p-6 rounded-2xl border shadow-sm cursor-pointer hover:shadow-md flex flex-col justify-between"><div className="flex items-center space-x-2 mb-2"><AlertCircle size={18}/><span className="text-xs md:text-sm font-bold opacity-70 uppercase tracking-widest">Tickets Open</span></div><span className="text-2xl md:text-3xl font-bold text-[#003040]">{stats.open}</span></div>
+        <div className="bg-white border-gray-200 text-[#003040] p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col justify-between"><div className="flex items-center space-x-2 mb-2"><Coins size={18} className="text-[#a0c8d2]"/><span className="text-xs md:text-sm font-bold opacity-70 uppercase tracking-widest">Resolution Cost</span></div><span className="text-2xl md:text-3xl font-bold">{currency}{stats.cost.toFixed(2)}</span></div>
       </div>
     </div>
   );
 }
 
-function StatBox({ label, value, color, onClick }) {
-  return (
-    <div onClick={onClick} className={`${color} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center min-h-[100px] ${onClick ? 'active:scale-95' : ''}`}>
-      <span className="text-3xl md:text-4xl font-bold leading-none mb-2">{value}</span>
-      <span className="text-xs md:text-sm font-semibold text-center opacity-80 uppercase tracking-widest break-words">{label}</span>
-    </div>
-  );
-}
-
-function MetricCard({ label, value, color, onClick, icon }) {
-  return (
-    <div onClick={onClick} className={`${color} p-4 md:p-6 rounded-2xl border shadow-sm transition-all min-h-[100px] active:scale-[0.98] ${onClick ? 'cursor-pointer hover:shadow-md hover:border-gray-300' : ''} flex flex-col justify-between`}>
-      <div className="flex flex-col md:flex-row md:items-center items-start md:space-x-2 space-y-1 md:space-y-0 mb-3">
-        {icon}
-        <span className="text-xs md:text-sm font-bold opacity-70 uppercase tracking-widest">{label}</span>
-      </div>
-      <span className="text-2xl md:text-3xl font-bold truncate block text-[#003040]">{value}</span>
-    </div>
-  );
-}
-
-function AddEntryForm({ onSave, currency, exchangeRates }) {
+function FeedbackAddForm({ onSave, currency, exchangeRates }) {
   const [type, setType] = useState('complaint');
   const [form, setForm] = useState({ 
     guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', 
@@ -653,39 +701,21 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
     const normalizedCostInUSD = (Number(form.cost) || 0) / activeRateScale;
 
     const finalizedEntry = { 
-      ...form, 
-      type, 
-      date: new Date().toISOString(), 
-      sentiment: analyzeSentiment(form.reason), 
-      cost: normalizedCostInUSD,
-      severity: inferredSeverity, 
-      isArchived: false,
-      comments: [] 
+      ...form, type, date: new Date().toISOString(), sentiment: analyzeSentiment(form.reason), 
+      cost: normalizedCostInUSD, severity: inferredSeverity, isArchived: false, comments: [] 
     };
 
     let whatsappCallback = null;
     if ((type === 'complaint' || type === 'incident') && (form.department === 'Maintenance' || form.department === 'Housekeeping' || inferredSeverity === 'critical')) {
-      let alertHeading = inferredSeverity === 'critical' ? `🚨 *CRITICAL GM INTERVENTION REQUIRED* 🚨` : `🚨 *NEW TICKET ALERT* 🚨`;
-      const formattedMsg = `${alertHeading}\n\n*Type:* ${type.toUpperCase()}\n*SOP Status:* ${SOP_FRAMEWORK[inferredSeverity].label}\n*Dept:* ${form.department}\n*Guest/Location:* ${form.guestName}\n*Details:* ${form.reason}\n*Logged By:* ${form.handledBy}`;
-      const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(formattedMsg)}`;
-      
-      whatsappCallback = () => {
-        window.open(whatsappUrl, 'whatsapp_shared_tab');
-      };
+      const msg = `${inferredSeverity === 'critical' ? '🚨 *CRITICAL GM INTERVENTION REQUIRED* 🚨' : '🚨 *NEW TICKET ALERT* 🚨'}\n\n*Type:* ${type.toUpperCase()}\n*SOP Status:* ${SOP_FRAMEWORK[inferredSeverity].label}\n*Dept:* ${form.department}\n*Guest/Location:* ${form.guestName}\n*Details:* ${form.reason}\n*Logged By:* ${form.handledBy}`;
+      whatsappCallback = () => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, 'whatsapp_shared_tab');
     }
-
     onSave(finalizedEntry, whatsappCallback);
-    
-    setForm({ 
-      guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', 
-      handledBy: '', actionTaken: activeActionOptions[0], cost: '', status: 'resolved',
-      followUpEmail: '', followUpPhone: '', guestEmailSent: false, managerEmailSent: false, escalationSent: false, staffMentioned: ''
-    });
+    setForm({ guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', handledBy: '', actionTaken: activeActionOptions[0], cost: '', status: 'resolved', followUpEmail: '', followUpPhone: '', guestEmailSent: false, managerEmailSent: false, escalationSent: false, staffMentioned: '' });
   };
 
   return (
     <form onSubmit={submit} className="p-4 md:p-8 space-y-4 md:space-y-6 font-sans max-w-4xl mx-auto animate-in fade-in duration-500">
-      
       <div className="flex bg-white border border-gray-200 rounded-xl p-1.5 shadow-sm">
         <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-2.5 md:py-3 text-xs md:text-sm font-bold rounded-lg transition-all ${type === 'compliment' ? 'bg-[#595733]/10 shadow-sm text-[#595733]' : 'text-gray-500 hover:bg-gray-50'}`}>Compliment</button>
         <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-2.5 md:py-3 text-xs md:text-sm font-bold rounded-lg transition-all ${type === 'complaint' ? 'bg-[#8e2a2a]/10 shadow-sm text-[#8e2a2a]' : 'text-gray-500 hover:bg-gray-50'}`}>Complaint</button>
@@ -693,93 +723,58 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
       </div>
 
       <div className="bg-white p-5 md:p-8 rounded-2xl border border-gray-200 shadow-sm space-y-5">
-        <h3 className="font-bold text-xl text-[#003040] border-b border-gray-100 pb-3 flex items-center">
-          <Users className="mr-2 text-[#a0c8d2]" size={20} /> {type === 'incident' ? 'Incident Location/Guest' : 'Guest Details'}
-        </h3>
-        
+        <h3 className="font-bold text-xl text-[#003040] border-b border-gray-100 pb-3 flex items-center"><Users className="mr-2 text-[#a0c8d2]" size={20} /> {type === 'incident' ? 'Incident Location/Guest' : 'Guest Details'}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <div className="md:col-span-2">
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">{type === 'incident' ? 'Guest Name or Specific Area' : 'Guest Name / Room No.'}</label>
-            <input required value={form.guestName} onChange={e=>setForm({...form, guestName: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="e.g. Room 412 or Lobby Area" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Guest Email</label>
-            <div className="relative">
-               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-               <input type="email" value={form.guestEmail} onChange={e=>setForm({...form, guestEmail: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="guest@email.com" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Guest Phone</label>
-            <div className="relative">
-               <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-               <input type="tel" value={form.guestPhone} onChange={e=>setForm({...form, guestPhone: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="+1 234..." />
-            </div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">{type === 'incident' ? 'Guest Name or Area' : 'Guest Name / Room No.'}</label>
+            <input required value={form.guestName} onChange={e=>setForm({...form, guestName: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="Room 412" />
           </div>
         </div>
       </div>
 
       <div className="bg-white p-5 md:p-8 rounded-2xl border border-gray-200 shadow-sm space-y-5">
-        <h3 className="font-bold text-xl text-[#003040] border-b border-gray-100 pb-3 flex items-center">
-          <FileText className="mr-2 text-[#a0c8d2]" size={20} /> Event Documentation
-        </h3>
-        
+        <h3 className="font-bold text-xl text-[#003040] border-b border-gray-100 pb-3 flex items-center"><FileText className="mr-2 text-[#a0c8d2]" size={20} /> Event Documentation</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <div className="md:col-span-2">
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Department Mentioned</label>
             <div className="relative">
-              <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pr-10 md:pr-12 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
+              <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pr-10 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
                 {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
             </div>
           </div>
-
           <div className="md:col-span-2">
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Specific Issue / Details</label>
-            <textarea required value={form.reason} onChange={e=>setForm({...form, reason: e.target.value})} rows="2" className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040] resize-none" placeholder={type !== 'compliment' ? "Provide details to auto-classify escalation..." : "What exactly did they love?"} />
+            <textarea required value={form.reason} onChange={e=>setForm({...form, reason: e.target.value})} rows="2" className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040] resize-none" placeholder="Provide details..." />
           </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-[#a0c8d2]/10 p-4 rounded-xl border border-[#a0c8d2]/30 flex flex-col space-y-2">
-              <div className="flex items-center space-x-2 pb-2 border-b border-black/5">
-                <Lightbulb className="text-[#003040]" size={18} />
-                <span className="font-bold text-sm text-[#003040]">AI Department Guidance</span>
-              </div>
-              <p className="text-xs md:text-sm text-[#003040]/80 leading-relaxed font-medium">
-                {type === 'complaint' ? SUGGESTED_RESOLUTIONS[form.department] 
-                 : type === 'incident' ? SUGGESTED_INCIDENT_ACTIONS[form.department] 
-                 : SUGGESTED_COMPLIMENT_ACTIONS[form.department]}
-              </p>
+              <div className="flex items-center space-x-2 pb-2 border-b border-black/5"><Lightbulb className="text-[#003040]" size={18} /><span className="font-bold text-sm text-[#003040]">AI Guidance</span></div>
+              <p className="text-xs md:text-sm text-[#003040]/80 leading-relaxed font-medium">{type === 'complaint' ? SUGGESTED_RESOLUTIONS[form.department] : type === 'incident' ? SUGGESTED_INCIDENT_ACTIONS[form.department] : SUGGESTED_COMPLIMENT_ACTIONS[form.department]}</p>
             </div>
-            
             {(type === 'complaint' || type === 'incident') && form.reason.trim().length > 2 && (
               <div className={`p-4 rounded-xl border flex flex-col space-y-2 transition-all duration-300 ${SOP_FRAMEWORK[inferredSeverity].color}`}>
-                <div className="flex items-center space-x-2 border-b pb-2 border-black/5">
-                  {SOP_FRAMEWORK[inferredSeverity].icon}
-                  <span className="font-bold text-sm uppercase tracking-wide">SOP: {SOP_FRAMEWORK[inferredSeverity].label}</span>
-                </div>
-                <p className="text-xs md:text-sm leading-relaxed font-bold opacity-90">{SOP_FRAMEWORK[inferredSeverity].authority}</p>
-                <p className="text-xs md:text-sm leading-relaxed italic opacity-80 mt-1">"{SOP_FRAMEWORK[inferredSeverity].steps}"</p>
+                <div className="flex items-center space-x-2 border-b pb-2 border-black/5">{SOP_FRAMEWORK[inferredSeverity].icon}<span className="font-bold text-sm uppercase tracking-wide">SOP: {SOP_FRAMEWORK[inferredSeverity].label}</span></div>
+                <p className="text-xs md:text-sm font-bold opacity-90">{SOP_FRAMEWORK[inferredSeverity].authority}</p>
+                <p className="text-xs md:text-sm italic opacity-80 mt-1">"{SOP_FRAMEWORK[inferredSeverity].steps}"</p>
               </div>
             )}
         </div>
 
         {type === 'compliment' && (
            <div>
-             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Staff Member Mentioned (Optional)</label>
-             <div className="relative">
-                <Award className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#cf6231]" size={18} />
-                <input value={form.staffMentioned} onChange={e=>setForm({...form, staffMentioned: e.target.value})} className="w-full border border-[#cf6231]/30 bg-[#cf6231]/5 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#cf6231] text-[#cf6231] font-bold" placeholder="Who did the guest praise?" />
-             </div>
+             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Staff Member Mentioned</label>
+             <input value={form.staffMentioned} onChange={e=>setForm({...form, staffMentioned: e.target.value})} className="w-full border border-[#cf6231]/30 bg-[#cf6231]/5 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#cf6231] text-[#cf6231] font-bold" placeholder="Who did the guest praise?" />
            </div>
         )}
 
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Action Taken / Standard Resolution</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Action Taken</label>
           <div className="relative">
-            <select value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pr-10 md:pr-12 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
+            <select value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pr-10 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
               {activeActionOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
@@ -789,55 +784,28 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
 
       {(type === 'complaint' || type === 'incident') && (
         <div className="bg-white p-5 md:p-8 rounded-2xl border border-gray-200 shadow-sm space-y-5">
-          <h3 className="font-bold text-xl text-[#003040] border-b border-gray-100 pb-3 flex items-center">
-             <Activity className="mr-2 text-[#a0c8d2]" size={20} /> Escalation & Costs
-          </h3>
+          <h3 className="font-bold text-xl text-[#003040] border-b border-gray-100 pb-3 flex items-center"><Activity className="mr-2 text-[#a0c8d2]" size={20} /> Escalation & Costs</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">Status</label>
-              <div className="relative">
-                <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pr-10 md:pr-12 text-sm outline-none focus:ring-2 focus:ring-[#003040] bg-white font-bold text-[#8e2a2a] cursor-pointer appearance-none">
-                  <option value="open">Requires Further Action (Open)</option><option value="resolved" className="text-green-700">Resolved & Closed</option>
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
-              </div>
+              <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040] bg-white font-bold text-[#8e2a2a]">
+                <option value="open">Requires Further Action (Open)</option><option value="resolved" className="text-green-700">Resolved & Closed</option>
+              </select>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Cost / Damage</label>
-              <div className="relative w-full">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold"><Coins size={18} /></span>
-                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-300 rounded-xl p-3 md:p-4 pl-12 md:pl-14 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
-              </div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Cost</label>
+              <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm font-bold text-[#8e2a2a] outline-none focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
             </div>
           </div>
-          
-          {form.status === 'open' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 pt-4 border-t border-gray-100 animate-in fade-in duration-300">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">{inferredSeverity === 'critical' ? 'GM Email Target' : 'Supervisor / HOD Email Target'}</label>
-                <div className="relative">
-                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                   <input type="email" value={form.followUpEmail} onChange={e=>setForm({...form, followUpEmail: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="manager@hotel.com" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">{inferredSeverity === 'critical' ? 'GM WhatsApp Number Target' : 'Handler WhatsApp Number'}</label>
-                <div className="relative">
-                   <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                   <input type="tel" value={form.followUpPhone} onChange={e=>setForm({...form, followUpPhone: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="+27 82 123 4567" />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
       <div className="flex flex-col md:flex-row items-center gap-4 pt-4">
          <div className="w-full md:w-1/3 bg-[#a0c8d2]/10 p-3 md:p-4 rounded-xl border border-[#a0c8d2]/30 shadow-sm">
             <label className="block text-xs font-bold text-[#003040] mb-1.5 uppercase tracking-wider">Logged By Profile</label>
-            <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full border border-[#a0c8d2] rounded-lg p-2.5 text-sm font-bold text-[#003040] outline-none focus:ring-2 focus:ring-[#003040] bg-white text-center" placeholder="Your Full Name" />
+            <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full border border-[#a0c8d2] rounded-lg p-2.5 text-sm font-bold text-[#003040] outline-none focus:ring-2 focus:ring-[#003040] bg-white text-center" placeholder="Your Name" />
          </div>
-         <button type="submit" className="w-full md:w-2/3 bg-[#003040] text-white font-bold py-4 md:py-6 rounded-xl text-lg hover:bg-[#003040]/90 transition-all shadow-lg hover:shadow-xl active:scale-[0.98] flex items-center justify-center">
+         <button type="submit" className="w-full md:w-2/3 bg-[#003040] text-white font-bold py-4 md:py-6 rounded-xl text-lg hover:bg-[#003040]/90 transition-all shadow-lg active:scale-[0.98] flex items-center justify-center">
             <Database size={24} className="mr-3 text-[#a0c8d2]" /> Push to Cloud Securely
          </button>
       </div>
@@ -845,13 +813,11 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
   );
 }
 
-function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, exchangeRates, filter, setFilter, ticker }) {
+function FeedbackHistory({ entries, onResolve, onAddComment, onMarkEmailSent, currency, exchangeRates, filter, setFilter, ticker }) {
   const [commentInput, setCommentInput] = useState({});
-  
   const filtered = entries.filter(e => {
     if (filter === 'archived') return e.isArchived;
     if (e.isArchived) return false;
-
     if (filter === 'all') return true;
     if (filter === 'open') return e.status === 'open';
     if (filter === 'resolved') return e.status === 'resolved';
@@ -866,77 +832,34 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
 
   const getSLADetails = (entry) => {
     if ((entry.type !== 'complaint' && entry.type !== 'incident') || entry.status !== 'open') return { isBreached: false };
-    const msElapsed = Date.now() - new Date(entry.date).getTime();
-    const minutesElapsed = msElapsed / 60000;
-    
-    return {
-      isBreached: minutesElapsed >= 15, 
-      hours: Math.floor(minutesElapsed / 60),
-      minutes: Math.floor(minutesElapsed % 60)
-    };
+    const minsElapsed = (Date.now() - new Date(entry.date).getTime()) / 60000;
+    return { isBreached: minsElapsed >= 15, hours: Math.floor(minsElapsed / 60), minutes: Math.floor(minsElapsed % 60) };
   };
 
   const handleSendEmail = (entry, emailType) => {
     let to = "", sub = "", body = "";
     if (emailType === 'manager') {
       to = entry.followUpEmail || "";
-      sub = entry.severity === 'critical' ? `🚨 [CRITICAL GM ESCALATION]: ${entry.department}` : `[HOD NOTICE] OPEN TICKET: ${entry.department}`;
-      body = `SOP LEVEL: ${SOP_FRAMEWORK[entry.severity || 'quick'].label}\n\nTYPE: ${entry.type.toUpperCase()}\nGUEST/ROOM: ${entry.guestName}\nREASON: ${entry.reason}\nLOGGED BY: ${entry.handledBy}`;
-    } else if (emailType === 'escalation') {
-      const sla = getSLADetails(entry);
-      to = entry.followUpEmail || "";
-      sub = `🚨 [SLA BREACH ALERT] ${entry.department} Ticket Overdue`;
-      body = `WARNING: The following ticket has breached its 15-minute resolution window.\n\nOverdue by: ${sla.hours}h ${sla.minutes}m\nRoom/Guest: ${entry.guestName}\nIssue: ${entry.reason}\nLogged By: ${entry.handledBy}`;
+      sub = entry.severity === 'critical' ? `🚨 [CRITICAL]: ${entry.department}` : `[HOD NOTICE]: ${entry.department}`;
+      body = `SOP LEVEL: ${SOP_FRAMEWORK[entry.severity || 'quick'].label}\nTYPE: ${entry.type.toUpperCase()}\nGUEST/ROOM: ${entry.guestName}\nREASON: ${entry.reason}\nLOGGED BY: ${entry.handledBy}`;
     } else {
-      
-      // DYNAMIC IN-HOUSE CONTEXTUAL GUEST EMAIL ENGINE
       to = entry.guestEmail || "";
-      
-      // Clean up the text input so it flows smoothly in the middle of a sentence
       const lowerReason = entry.reason ? entry.reason.charAt(0).toLowerCase() + entry.reason.slice(1) : "this matter";
       const lowerAction = entry.actionTaken ? entry.actionTaken.charAt(0).toLowerCase() + entry.actionTaken.slice(1) : "addressed the situation";
-
       if (entry.type === 'compliment') {
         sub = `Thank you for experiencing ONOMO Hospitality!`;
-        const staffShoutout = entry.staffMentioned ? ` I will personally ensure that ${entry.staffMentioned} is recognized for their fantastic service and true O-Smile.` : '';
-        
-        body = `Dear ${entry.guestName},\n\nWarm greetings from the ONOMO Sandton family!\n\nThank you so much for sharing your wonderful feedback regarding our ${entry.department}. It brings us immense joy to hear that ${lowerReason}.${staffShoutout}\n\nSince you are still in-house with us, we wanted to reach out immediately to celebrate this with you. African hospitality is at the heart of everything we do, and ensuring you feel at home is our greatest reward.\n\nPlease let us know if there is anything else we can do to make the rest of your stay even more special.\n\nWarmest regards,\nONOMO Hotel Sandton Management`;
-        
-      } else if (entry.type === 'incident') {
-        sub = `Checking in on your experience at ONOMO Sandton`;
-        body = `Dear ${entry.guestName},\n\nWarm greetings from ONOMO Hotel Sandton.\n\nI am reaching out personally following the incident reported regarding ${lowerReason}. Please accept our sincere concern, as your safety and comfort are our absolute highest priorities.\n\nWe have immediately ${lowerAction} to ensure everything is resolved and secure.\n\nAs you are still our guest, we want to ensure you feel completely looked after. Please let us know if you require any further assistance or if there is anything we can do to make the remainder of your stay more comfortable.\n\nWith warm regards and care,\nONOMO Hotel Sandton Management`;
-        
+        body = `Dear ${entry.guestName},\n\nThank you for sharing your feedback regarding our ${entry.department}. It brings us immense joy to hear that ${lowerReason}.\n\nWarmest regards,\nONOMO Hotel Sandton`;
       } else {
         sub = `Following up on your experience at ONOMO Sandton`;
-        body = `Dear ${entry.guestName},\n\nWarm greetings from ONOMO Hotel Sandton.\n\nI am writing to you personally regarding your recent experience with our ${entry.department}. Please accept our most sincere apologies that ${lowerReason}. At ONOMO, we pride ourselves on delivering warm, flawless African hospitality, and it deeply saddens us when we fall short.\n\nTo ensure your comfort, we have immediately ${lowerAction}. We hope this helps to bring the ONOMO smile back to your stay.\n\nSince you are still with us, your peace of mind is our highest priority. I would love to ensure the rest of your time here is completely flawless. Please let us know if you need any further assistance.\n\nWith sincere apologies and warm regards,\nONOMO Hotel Sandton Management`;
+        body = `Dear ${entry.guestName},\n\nI am writing to you personally regarding your experience with our ${entry.department}. Please accept our sincere apologies that ${lowerReason}.\n\nTo ensure your comfort, we have immediately ${lowerAction}. Please let us know if you need any further assistance.\n\nWarm regards,\nONOMO Hotel Sandton`;
       }
     }
     window.location.href = `mailto:${to}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
     onMarkEmailSent(entry.id, emailType);
   };
 
-  const handleWhatsAppEscalation = (entry) => {
-    const sla = getSLADetails(entry);
-    const cleanedPhone = (entry.followUpPhone || "").replace(/\s+/g, '');
-    let msg = "";
-    
-    if (entry.severity === 'critical') {
-      msg = `🚨 *CRITICAL GM ACTION INTERVENTION* 🚨\n\nA critical incident requires executive review and physical service recovery action.\n\n*Type:* ${entry.type.toUpperCase()}\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}\n*Logged By:* ${entry.handledBy}`;
-    } else {
-      msg = `⚠️ *SLA BREACH NOTIFICATION* ⚠️\n\nThis ticket has crossed its 15-minute threshold without finalization.\n\n*Overdue Time:* ${sla.hours}h ${sla.minutes}m\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}`;
-    }
-    
-    const whatsappUrl = cleanedPhone 
-      ? `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodeURIComponent(msg)}`
-      : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
-      
-    window.open(whatsappUrl, 'whatsapp_shared_tab');
-    onMarkEmailSent(entry.id, 'escalation');
-  };
-
   return (
     <div className="p-4 md:p-8 space-y-4 md:space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-      
       <div className="flex flex-wrap bg-white rounded-xl p-2 md:p-3 shadow-sm border border-gray-200 gap-2 w-full">
         {['all', 'open', 'resolved', 'complaint', 'incident', 'compliment', 'archived'].map(f => (
           <button key={f} onClick={() => setFilter(f)} className={`flex-1 min-w-[30%] md:min-w-[100px] py-2 md:py-2.5 text-xs md:text-sm font-bold rounded-lg capitalize transition-all ${filter === f ? (f === 'archived' ? 'bg-gray-800 text-white' : 'bg-[#003040] shadow-md text-white') : 'text-gray-500 hover:bg-gray-100'}`}>
@@ -945,10 +868,9 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
         ))}
       </div>
 
-      {entries.length === 0 || filtered.length === 0 ? (
+      {filtered.length === 0 ? (
          <div className="p-12 md:p-24 bg-white rounded-2xl border border-gray-200 text-center text-gray-400 flex flex-col items-center h-full justify-center shadow-sm">
-            {filter === 'archived' ? <Archive size={64} className="mb-4 text-gray-200" /> : <List size={64} className="mb-4 text-gray-200" />}
-            <p className="text-lg font-medium">No records found for this filter.</p>
+            <List size={64} className="mb-4 text-gray-200" /><p className="text-lg font-medium">No records found.</p>
          </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
@@ -956,135 +878,28 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
             const localDisplayCost = (Number(entry.cost) || 0) * displayConversionFactor;
             const sla = getSLADetails(entry);
             const activeSeverity = entry.severity || 'quick';
-
-            const leftBorderColor = sla.isBreached 
-              ? '#8e2a2a' 
-              : (entry.type === 'incident'
-                  ? '#003040'
-                  : entry.type === 'compliment' 
-                    ? '#595733' 
-                    : activeSeverity === 'critical' 
-                      ? '#8e2a2a' 
-                      : activeSeverity === 'intermediate' 
-                        ? '#cf6231' 
-                        : '#595733');
+            const leftBorderColor = sla.isBreached ? '#8e2a2a' : (entry.type === 'incident' ? '#003040' : entry.type === 'compliment' ? '#595733' : activeSeverity === 'critical' ? '#8e2a2a' : activeSeverity === 'intermediate' ? '#cf6231' : '#595733');
 
             return (
-              <div 
-                key={entry.id} 
-                className={`bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-l-8 transition-all duration-300 flex flex-col h-full ${
-                  sla.isBreached ? 'border-[#8e2a2a] bg-[#8e2a2a]/5 hover:shadow-md' : 'border-gray-200 hover:shadow-md'
-                } ${entry.isArchived ? 'opacity-80 grayscale-[30%]' : ''}`} 
-                style={{ borderLeftColor: leftBorderColor }}
-              >
+              <div key={entry.id} className={`bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-l-8 transition-all duration-300 flex flex-col h-full ${sla.isBreached ? 'border-[#8e2a2a] bg-[#8e2a2a]/5 hover:shadow-md' : 'border-gray-200 hover:shadow-md'} ${entry.isArchived ? 'opacity-80 grayscale-[30%]' : ''}`} style={{ borderLeftColor: leftBorderColor }}>
                 <div>
-                  {entry.isArchived && (
-                     <div className="mb-4 -mx-5 md:-mx-6 -mt-5 md:-mt-6 bg-gray-800 text-white font-bold uppercase text-[10px] md:text-xs tracking-wider p-2.5 flex items-center justify-center space-x-2 rounded-t-xl shadow-sm">
-                       <Archive size={14} /><span>Archived Record</span>
-                     </div>
-                  )}
-
                   {sla.isBreached && !entry.isArchived && (
-                    <div className="mb-4 -mx-5 md:-mx-6 -mt-5 md:-mt-6 bg-[#8e2a2a] text-white font-bold uppercase text-[10px] md:text-xs tracking-wider p-2.5 flex items-center justify-center space-x-2 animate-pulse rounded-t-xl shadow-sm">
-                      <Clock size={14} />
-                      <span>⚠️ SLA BREACHED: Overdue {sla.hours}h {sla.minutes}m</span>
-                    </div>
+                    <div className="mb-4 -mx-5 md:-mx-6 -mt-5 md:-mt-6 bg-[#8e2a2a] text-white font-bold uppercase text-[10px] md:text-xs tracking-wider p-2.5 flex items-center justify-center space-x-2 animate-pulse rounded-t-xl shadow-sm"><Clock size={14} /><span>⚠️ SLA BREACHED: Overdue {sla.hours}h {sla.minutes}m</span></div>
                   )}
-
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-                      {entry.type === 'compliment' && <ThumbsUp className="text-[#595733] shrink-0" size={20} />}
-                      {entry.type === 'complaint' && <ThumbsDown className="text-[#8e2a2a] shrink-0" size={20} />}
-                      {entry.type === 'incident' && <AlertTriangle className="text-[#003040] shrink-0" size={20} />}
-                      
-                      {(entry.type === 'complaint' || entry.type === 'incident') && (
-                        <span className={`text-[10px] md:text-xs px-2.5 py-1 rounded-full font-bold border whitespace-nowrap ${SOP_FRAMEWORK[activeSeverity].badge}`}>
-                          {SOP_FRAMEWORK[activeSeverity].label}
-                        </span>
-                      )}
-                      
-                      <span className={`text-[10px] md:text-xs px-2.5 py-1 rounded-full font-bold border whitespace-nowrap ${entry.sentiment?.color || 'bg-gray-50 text-gray-400'}`}>{entry.sentiment?.label || 'Neutral'}</span>
-                    </div>
-                  </div>
-                  
-                  <h3 className="font-bold text-gray-900 text-lg md:text-xl break-words">{entry.guestName}</h3>
+                  <h3 className="font-bold text-gray-900 text-lg md:text-xl break-words mt-2">{entry.guestName}</h3>
                   <p className="text-sm md:text-base font-semibold text-gray-600 mt-1 whitespace-pre-wrap break-words">{entry.reason}</p>
                   
                   <div className="grid grid-cols-2 gap-y-3 mt-4 text-xs md:text-sm text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <div><span className="block text-[9px] uppercase tracking-widest font-bold mb-0.5">Dept</span><span className="font-bold text-gray-800 break-words">{entry.department}</span></div>
                     <div><span className="block text-[9px] uppercase tracking-widest font-bold mb-0.5">Logged By</span><span className="font-bold text-gray-800 break-words">{entry.handledBy}</span></div>
-                    <div className="col-span-2 flex justify-between items-center pt-2 border-t border-gray-200">
-                       <span className="text-[10px] text-gray-400 font-bold flex items-center"><Calendar size={12} className="mr-1.5" /> {new Date(entry.date).toLocaleDateString()}</span>
-                       {(entry.type === 'complaint' || entry.type === 'incident') && <span className="font-bold text-[#8e2a2a] flex items-center bg-white px-2 py-0.5 rounded shadow-sm border border-red-100"><Coins size={12} className="mr-1.5" /> {localDisplayCost.toFixed(2)}</span>}
-                    </div>
-                    {entry.type === 'compliment' && entry.staffMentioned && <div className="col-span-2 text-[#cf6231] font-bold flex items-center pt-2 border-t border-gray-200"><Award size={14} className="mr-1.5" /> Recognized: {entry.staffMentioned}</div>}
                   </div>
-
-                  <div className="mt-4">
-                    <span className="text-gray-400 font-bold uppercase tracking-widest block text-[9px] mb-1.5">Action Taken</span>
-                    <p className="text-gray-700 text-sm leading-relaxed italic break-words whitespace-pre-wrap">"{entry.actionTaken}"</p>
-                  </div>
+                  <div className="mt-4"><span className="text-gray-400 font-bold uppercase tracking-widest block text-[9px] mb-1.5">Action Taken</span><p className="text-gray-700 text-sm leading-relaxed italic break-words whitespace-pre-wrap">"{entry.actionTaken}"</p></div>
                 </div>
 
                 <div className="mt-auto pt-5 border-t border-gray-100 space-y-4">
-                  <div className="bg-[#f6ebda]/30 rounded-xl p-3 border border-[#a0c8d2]/30">
-                    <h4 className="text-xs font-bold text-[#003040] mb-2 flex items-center"><MessageSquare size={14} className="mr-1.5" /> Internal Notes</h4>
-                    <div className="space-y-2 mb-3 max-h-24 overflow-y-auto pr-1">
-                      {entry.comments?.map((c, i) => (
-                        <div key={i} className="bg-white p-2 rounded-lg border border-gray-200 text-xs shadow-sm">
-                          <span className="font-bold text-[#cf6231]">{c.author}:</span> <span className="text-gray-700 break-words whitespace-pre-wrap">{c.text}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2">
-                      <input value={commentInput[entry.id]?.author || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], author: e.target.value}})} placeholder="Name" className="w-full md:w-1/3 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
-                      <input value={commentInput[entry.id]?.text || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text: e.target.value}})} placeholder="Note..." className="w-full md:flex-1 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
-                      <button onClick={()=>{ if(!commentInput[entry.id]?.text) return; onAddComment(entry.id, commentInput[entry.id].text, commentInput[entry.id].author || "Staff"); setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text:''}}); }} className="w-full md:w-auto bg-[#003040] hover:bg-[#003040]/90 transition-colors text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm active:scale-95">Post</button>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col space-y-2.5">
-                    {sla.isBreached && !entry.isArchived && (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
-                        <p className="text-[10px] font-bold text-[#8e2a2a] uppercase tracking-widest text-center">Urgent Escalation</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button onClick={() => handleWhatsAppEscalation(entry)} className={`py-2 px-1 text-[10px] md:text-xs font-bold rounded-lg border flex items-center justify-center shadow-sm transition-all ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-100'}`}>
-                            <MessageSquare size={14} className="mr-1.5" /> {entry.escalationSent ? "Escalated" : "WhatsApp"}
-                          </button>
-                          {entry.followUpEmail && (
-                            <button onClick={() => handleSendEmail(entry, 'escalation')} className={`py-2 px-1 text-[10px] md:text-xs font-bold rounded-lg border flex items-center justify-center shadow-sm transition-all ${entry.escalationSent ? 'bg-green-600 text-white border-green-700' : 'bg-white border-red-300 text-red-700 hover:bg-red-100'}`}>
-                              <Mail size={14} className="mr-1.5" /> Email
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {!entry.isArchived && entry.guestEmail && (
-                      <button onClick={() => handleSendEmail(entry, 'guest')} className={`w-full font-bold py-2.5 rounded-xl border transition-all text-xs md:text-sm flex items-center justify-center shadow-sm active:scale-[0.98] ${entry.guestEmailSent ? 'bg-[#595733]/10 border-[#595733]/30 text-[#595733]' : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'}`}>
-                        {entry.guestEmailSent ? <CheckCircle size={16} className="mr-2" /> : <Mail size={16} className="mr-2 text-gray-400" />} {entry.guestEmailSent ? 'GUEST NOTIFIED' : 'Email Guest'}
-                      </button>
-                    )}
-                    
-                    {entry.status === 'open' && !entry.isArchived && (
-                      <>
-                        {entry.followUpEmail && !sla.isBreached && (
-                          <button onClick={() => handleSendEmail(entry, 'manager')} className={`w-full py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center shadow-sm transition-all active:scale-[0.98] ${entry.managerEmailSent ? 'bg-green-600 text-white' : 'bg-[#003040] text-white hover:bg-[#003040]/90'}`}>
-                            {entry.managerEmailSent ? <CheckCircle size={16} className="mr-2" /> : <AlertCircle size={16} className="mr-2" />} 
-                            {entry.managerEmailSent ? (activeSeverity === 'critical' ? 'GM NOTIFIED' : 'HOD ALERTED') : (activeSeverity === 'critical' ? 'Escalate to GM' : 'Alert HOD')}
-                          </button>
-                        )}
-                        
-                        {activeSeverity === 'critical' && !sla.isBreached && (
-                          <button onClick={() => handleWhatsAppEscalation(entry)} className="w-full bg-[#595733] hover:bg-[#595733]/90 text-white font-bold py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center shadow-sm active:scale-[0.98] transition-all">
-                            <MessageSquare size={16} className="mr-2" /> WhatsApp GM Link
-                          </button>
-                        )}
-
-                        <button onClick={() => onResolve(entry.id)} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl text-sm font-bold shadow-md mt-2 transition-all active:scale-[0.98]">Close Ticket</button>
-                      </>
-                    )}
-                  </div>
+                  {entry.status === 'open' && !entry.isArchived && (
+                    <button onClick={() => onResolve(entry.id)} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl text-sm font-bold shadow-md mt-2 transition-all active:scale-[0.98]">Close Ticket</button>
+                  )}
                 </div>
               </div>
             );
