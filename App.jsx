@@ -33,7 +33,8 @@ import {
   ShieldAlert,
   UserCheck,
   Users,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -58,6 +59,20 @@ const SHARED_APP_ID = "hotel_feedback_main_sync";
 
 const DEPARTMENTS = [
   'Front Desk', 'Housekeeping', 'Food & Beverage', 'Maintenance', 'Concierge', 'Spa & Wellness', 'Valet/Parking', 'Security/General'
+];
+
+// --- STANDARDIZED ACTION OPTIONS ---
+const ACTION_OPTIONS = [
+  'Apologized and resolved immediately',
+  'Provided complimentary F&B voucher',
+  'Upgraded / Changed guest room',
+  'Maintenance repair completed',
+  'Housekeeping recovery / Amenity delivered',
+  'Adjusted / Waived charges on bill',
+  'Escalated to Supervisor / HOD',
+  'Escalated directly to General Manager',
+  'Logged for internal review (No direct guest action)',
+  'Passed praise to staff member'
 ];
 
 const CURRENCY_MAP = {
@@ -116,7 +131,7 @@ const SOP_FRAMEWORK = {
     badge: 'text-[#cf6231] bg-[#cf6231]/10 border-[#cf6231]/20',
     authority: 'Supervisor / HOD Required',
     icon: <Users size={18} className="text-[#cf6231]" />,
-    steps: 'Exceeds standard staff limits. The HOD or Duty Supervisor must take direct ownership, contact the guest, and implement structured service recovery within 45 minutes.'
+    steps: 'Exceeds standard staff limits. The HOD or Duty Supervisor must take direct ownership, contact the guest, and implement structured service recovery within 15 to 45 minutes.'
   },
   critical: {
     label: 'Critical Intervention',
@@ -491,7 +506,7 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
         </div>
       </div>
       
-      {/* 3-COLUMN METRICS (RESPONSIVE) */}
+      {/* 3-COLUMN METRICS */}
       <div className="grid grid-cols-3 gap-2 md:gap-6">
         <StatBox label="Praises" value={stats.comps} color="text-[#595733] bg-[#595733]/10 border-[#595733]/20 hover:bg-[#595733]/20 cursor-pointer transition-colors" onClick={() => onStatClick('compliment')} />
         <StatBox label="Complaints" value={stats.complaints} color="text-[#8e2a2a] bg-[#8e2a2a]/10 border-[#8e2a2a]/20 hover:bg-[#8e2a2a]/20 cursor-pointer transition-colors" onClick={() => onStatClick('complaint')} />
@@ -594,7 +609,7 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
   const [type, setType] = useState('complaint');
   const [form, setForm] = useState({ 
     guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', 
-    handledBy: '', actionTaken: '', cost: '', status: 'resolved',
+    handledBy: '', actionTaken: ACTION_OPTIONS[0], cost: '', status: 'resolved',
     followUpEmail: '', followUpPhone: '', guestEmailSent: false, managerEmailSent: false, escalationSent: false, staffMentioned: ''
   });
 
@@ -633,7 +648,7 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
     
     setForm({ 
       guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', 
-      handledBy: '', actionTaken: '', cost: '', status: 'resolved',
+      handledBy: '', actionTaken: ACTION_OPTIONS[0], cost: '', status: 'resolved',
       followUpEmail: '', followUpPhone: '', guestEmailSent: false, managerEmailSent: false, escalationSent: false, staffMentioned: ''
     });
   };
@@ -683,9 +698,12 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <div className="md:col-span-2">
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Department Mentioned</label>
-            <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer">
-              {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
-            </select>
+            <div className="relative">
+              <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
+                {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+              </select>
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+            </div>
           </div>
 
           <div className="md:col-span-2">
@@ -696,7 +714,6 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
         
         {/* DESKTOP OPTIMIZED AI CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* AI SUGGESTION BLOCK */}
             <div className="bg-[#a0c8d2]/10 p-4 rounded-xl border border-[#a0c8d2]/30 flex flex-col space-y-2">
               <div className="flex items-center space-x-2 pb-2 border-b border-black/5">
                 <Lightbulb className="text-[#003040]" size={18} />
@@ -709,7 +726,6 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
               </p>
             </div>
             
-            {/* AUTOMATED SOP PREVIEW PANEL */}
             {(type === 'complaint' || type === 'incident') && form.reason.trim().length > 2 && (
               <div className={`p-4 rounded-xl border flex flex-col space-y-2 transition-all duration-300 ${SOP_FRAMEWORK[inferredSeverity].color}`}>
                 <div className="flex items-center space-x-2 border-b pb-2 border-black/5">
@@ -733,8 +749,13 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
         )}
 
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Action Taken</label>
-          <textarea required value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} rows="3" className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="How was it resolved..." />
+          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Action Taken / Standard Resolution</label>
+          <div className="relative">
+            <select value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
+              {ACTION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+          </div>
         </div>
       </div>
 
@@ -780,7 +801,6 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
         </div>
       )}
 
-      {/* SUBMIT ROW */}
       <div className="flex flex-col md:flex-row items-center gap-4 pt-4">
          <div className="w-full md:w-1/3 bg-[#a0c8d2]/10 p-3 md:p-4 rounded-xl border border-[#a0c8d2]/30 shadow-sm">
             <label className="block text-xs font-bold text-[#003040] mb-1.5 uppercase tracking-wider">Logged By Profile</label>
@@ -813,11 +833,13 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
   const getSLADetails = (entry) => {
     if ((entry.type !== 'complaint' && entry.type !== 'incident') || entry.status !== 'open') return { isBreached: false };
     const msElapsed = Date.now() - new Date(entry.date).getTime();
-    const hoursElapsed = msElapsed / 3600000;
+    const minutesElapsed = msElapsed / 60000;
+    
+    // UPDATED SLA TIMER TO 15 MINUTE BENCHMARK FOR RAPID RESPONSE
     return {
-      isBreached: hoursElapsed >= 2, 
-      hours: Math.floor(hoursElapsed),
-      minutes: Math.floor((msElapsed % 3600000) / 60000)
+      isBreached: minutesElapsed >= 15, 
+      hours: Math.floor(minutesElapsed / 60),
+      minutes: Math.floor(minutesElapsed % 60)
     };
   };
 
@@ -831,11 +853,17 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
       const sla = getSLADetails(entry);
       to = entry.followUpEmail || "";
       sub = `🚨 [SLA BREACH ALERT] ${entry.department} Ticket Overdue`;
-      body = `WARNING: The following ticket has breached its 2-hour resolution window.\n\nOverdue by: ${sla.hours}h ${sla.minutes}m\nRoom/Guest: ${entry.guestName}\nIssue: ${entry.reason}\nLogged By: ${entry.handledBy}`;
+      body = `WARNING: The following ticket has breached its 15-minute resolution window.\n\nOverdue by: ${sla.hours}h ${sla.minutes}m\nRoom/Guest: ${entry.guestName}\nIssue: ${entry.reason}\nLogged By: ${entry.handledBy}`;
     } else {
+      // ONOMO BRAND VOICE EMAIL TONES
       to = entry.guestEmail || "";
-      sub = entry.type === 'compliment' ? "Thank you from the Hotel!" : "Following up on your experience";
-      body = `Dear ${entry.guestName},\n\nWe appreciate your feedback regarding the ${entry.department}.\n\nBest regards,\nManagement`;
+      if (entry.type === 'compliment') {
+        sub = `Thank you for experiencing ONOMO Hospitality!`;
+        body = `Dear ${entry.guestName},\n\nWarm greetings from the ONOMO Sandton family!\n\nThank you so much for your wonderful feedback regarding the ${entry.department}. It brings us immense joy to know that our team could make your stay memorable. African hospitality is at the heart of everything we do, and your kind words inspire us to keep delivering exceptional experiences.\n\nWe cannot wait to welcome you back to our vibrant hotel soon.\n\nWarmest regards,\nONOMO Hotel Sandton Management`;
+      } else {
+        sub = `Following up on your experience at ONOMO Sandton`;
+        body = `Dear ${entry.guestName},\n\nWarm greetings from ONOMO Hotel Sandton.\n\nI am writing to you personally regarding your recent experience with our ${entry.department}. Please accept our most sincere apologies for the issues you encountered. At ONOMO, we pride ourselves on delivering warm and flawless African hospitality, and it deeply saddens us when we fall short of that promise.\n\nWe have taken your feedback to heart and are actively addressing the matter with our team to ensure it does not happen again. Your comfort and peace of mind are our highest priorities.\n\nWe truly hope you will give us another opportunity to welcome you back and provide you with the flawless stay you deserve.\n\nWith sincere apologies and warm regards,\nONOMO Hotel Sandton Management`;
+      }
     }
     window.location.href = `mailto:${to}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
     onMarkEmailSent(entry.id, emailType);
@@ -849,7 +877,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     if (entry.severity === 'critical') {
       msg = `🚨 *CRITICAL GM ACTION INTERVENTION* 🚨\n\nA critical incident requires executive review and physical service recovery action.\n\n*Type:* ${entry.type.toUpperCase()}\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}\n*Logged By:* ${entry.handledBy}`;
     } else {
-      msg = `⚠️ *SLA BREACH NOTIFICATION* ⚠️\n\nThis ticket has crossed its 2-hour threshold without finalization.\n\n*Overdue Time:* ${sla.hours}h ${sla.minutes}m\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}`;
+      msg = `⚠️ *SLA BREACH NOTIFICATION* ⚠️\n\nThis ticket has crossed its 15-minute threshold without finalization.\n\n*Overdue Time:* ${sla.hours}h ${sla.minutes}m\n*Room/Guest:* ${entry.guestName}\n*Issue:* ${entry.reason}\n*Department:* ${entry.department}`;
     }
     
     const whatsappUrl = cleanedPhone 
@@ -876,7 +904,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
             <p className="text-lg font-medium">No records found for this filter.</p>
          </div>
       ) : (
-        /* MASONRY GRID LAYOUT FOR DESKTOP */
+        /* MASONRY GRID LAYOUT FOR DESKTOP - UNCLAMPED TEXT FOR FULL READABILITY */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {filtered.map(entry => {
             const localDisplayCost = (Number(entry.cost) || 0) * displayConversionFactor;
@@ -928,12 +956,12 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
                     </div>
                   </div>
                   
-                  <h3 className="font-bold text-gray-900 text-lg md:text-xl line-clamp-1">{entry.guestName}</h3>
-                  <p className="text-sm md:text-base font-semibold text-gray-600 mt-1 line-clamp-2">{entry.reason}</p>
+                  <h3 className="font-bold text-gray-900 text-lg md:text-xl break-words">{entry.guestName}</h3>
+                  <p className="text-sm md:text-base font-semibold text-gray-600 mt-1 whitespace-pre-wrap break-words">{entry.reason}</p>
                   
                   <div className="grid grid-cols-2 gap-y-3 mt-4 text-xs md:text-sm text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                    <div><span className="block text-[9px] uppercase tracking-widest font-bold mb-0.5">Dept</span><span className="font-bold text-gray-800 truncate">{entry.department}</span></div>
-                    <div><span className="block text-[9px] uppercase tracking-widest font-bold mb-0.5">Logged By</span><span className="font-bold text-gray-800 truncate">{entry.handledBy}</span></div>
+                    <div><span className="block text-[9px] uppercase tracking-widest font-bold mb-0.5">Dept</span><span className="font-bold text-gray-800 break-words">{entry.department}</span></div>
+                    <div><span className="block text-[9px] uppercase tracking-widest font-bold mb-0.5">Logged By</span><span className="font-bold text-gray-800 break-words">{entry.handledBy}</span></div>
                     <div className="col-span-2 flex justify-between items-center pt-2 border-t border-gray-200">
                        <span className="text-[10px] text-gray-400 font-bold flex items-center"><Calendar size={12} className="mr-1.5" /> {new Date(entry.date).toLocaleDateString()}</span>
                        {(entry.type === 'complaint' || entry.type === 'incident') && <span className="font-bold text-[#8e2a2a] flex items-center bg-white px-2 py-0.5 rounded shadow-sm border border-red-100"><Coins size={12} className="mr-1.5" /> {localDisplayCost.toFixed(2)}</span>}
@@ -943,7 +971,7 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
 
                   <div className="mt-4">
                     <span className="text-gray-400 font-bold uppercase tracking-widest block text-[9px] mb-1.5">Action Taken</span>
-                    <p className="text-gray-700 text-sm leading-relaxed italic line-clamp-3">"{entry.actionTaken}"</p>
+                    <p className="text-gray-700 text-sm leading-relaxed italic break-words whitespace-pre-wrap">"{entry.actionTaken}"</p>
                   </div>
                 </div>
 
@@ -952,10 +980,10 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
                   {/* Team Notes Section */}
                   <div className="bg-[#f6ebda]/30 rounded-xl p-3 border border-[#a0c8d2]/30">
                     <h4 className="text-xs font-bold text-[#003040] mb-2 flex items-center"><MessageSquare size={14} className="mr-1.5" /> Internal Notes</h4>
-                    <div className="space-y-2 mb-3 max-h-24 overflow-y-auto pr-1">
+                    <div className="space-y-2 mb-3 max-h-32 overflow-y-auto pr-1">
                       {entry.comments?.map((c, i) => (
                         <div key={i} className="bg-white p-2 rounded-lg border border-gray-200 text-xs shadow-sm">
-                          <span className="font-bold text-[#cf6231]">{c.author}:</span> <span className="text-gray-700">{c.text}</span>
+                          <span className="font-bold text-[#cf6231]">{c.author}:</span> <span className="text-gray-700 break-words whitespace-pre-wrap">{c.text}</span>
                         </div>
                       ))}
                     </div>
