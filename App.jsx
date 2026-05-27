@@ -1,3 +1,24 @@
+This is a brilliant operational pivot. The difference between a good hotel and an exceptional hotel is realizing that service recovery (or celebration) must happen *before* the guest checks out!
+
+To achieve this "intelligence" without forcing you to pay for external AI API keys, I have built **Dynamic Contextual String Interpolation** directly into the email engine.
+
+### 🧠 How the new Email Intelligence works:
+
+When a manager clicks "Email Guest", the app now actively reads the ticket and stitches the exact details into the Onomo-branded template.
+
+* It reads the **Department**.
+* It takes the **Reason** the staff member typed out and weaves it smoothly into the sentence.
+* It looks at the **Action Taken** dropdown and tells the guest exactly what was done to fix it.
+* If a staff member is praised, it dynamically adds a custom sentence promising to celebrate that specific staff member.
+* **In-House Focus:** Every email is now anchored in the present tense, letting the guest know you are watching over them *right now* while they are still in the building, rather than wishing them a safe journey home.
+
+Here is an example of what the app will now auto-generate for a complaint:
+
+> *"Dear Mr. Smith, ... Please accept our most sincere apologies that **the aircon was leaking water onto the floor**. ... To ensure your comfort, we have immediately **upgraded / changed your guest room**. Since you are still with us, your peace of mind is our highest priority..."*
+
+Copy this final, polished code block and replace your `App.jsx` on GitHub to push this intelligent email engine live!
+
+```react
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Home, 
@@ -34,7 +55,8 @@ import {
   UserCheck,
   Users,
   AlertTriangle,
-  ChevronDown
+  ChevronDown,
+  Archive
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -55,24 +77,32 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const SHARED_APP_ID = "hotel_feedback_main_sync";
+
+const SHARED_APP_ID = "onomo_live_production_v1";
 
 const DEPARTMENTS = [
   'Front Desk', 'Housekeeping', 'Food & Beverage', 'Maintenance', 'Concierge', 'Spa & Wellness', 'Valet/Parking', 'Security/General'
 ];
 
-// --- STANDARDIZED ACTION OPTIONS ---
-const ACTION_OPTIONS = [
-  'Apologized and resolved immediately',
-  'Provided complimentary F&B voucher',
-  'Upgraded / Changed guest room',
-  'Maintenance repair completed',
-  'Housekeeping recovery / Amenity delivered',
-  'Adjusted / Waived charges on bill',
-  'Escalated to Supervisor / HOD',
-  'Escalated directly to General Manager',
-  'Logged for internal review (No direct guest action)',
-  'Passed praise to staff member'
+// --- DYNAMIC ACTION OPTIONS ---
+const COMPLAINT_ACTIONS = [
+  'apologized and resolved immediately',
+  'provided a complimentary F&B voucher',
+  'upgraded / changed your guest room',
+  'ensured the maintenance repair was completed',
+  'provided a housekeeping recovery / amenity',
+  'adjusted / waived the charges on your bill',
+  'escalated the matter to the Department Head',
+  'escalated the matter directly to the General Manager',
+  'logged the issue for immediate internal review'
+];
+
+const COMPLIMENT_ACTIONS = [
+  'Thanked guest & logged on guest profile',
+  'Shared praise at daily briefing',
+  'Recognized staff member directly',
+  'Added to monthly recognition board',
+  'Sent follow-up appreciation note'
 ];
 
 const CURRENCY_MAP = {
@@ -115,7 +145,7 @@ const SUGGESTED_INCIDENT_ACTIONS = {
   'Security/General': 'Follow standard emergency protocols. Secure the area, assist guests, and alert the General Manager.'
 };
 
-// --- SOP ESCALATION DIRECTIVES (ONOMO PANTONES) ---
+// --- SOP ESCALATION DIRECTIVES ---
 const SOP_FRAMEWORK = {
   quick: {
     label: 'Quick Resolve',
@@ -277,6 +307,22 @@ export default function App() {
     } catch (error) { console.error(error); }
   };
 
+  const archiveResolvedTickets = async () => {
+    if (!window.confirm("Perform Monthly Reset? This will move all currently RESOLVED tickets into the Archive tab, clearing your active feeds for the new month.")) return;
+    
+    try {
+      entries.forEach(e => {
+        if (e.status === 'resolved' && !e.isArchived) {
+          const entryRef = doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries', e.id);
+          updateDoc(entryRef, { isArchived: true });
+        }
+      });
+      showToast("Monthly Reset Complete: Resolved tickets safely archived.");
+    } catch (error) {
+      showToast(`Archive failed: ${error.message}`);
+    }
+  };
+
   if (loading && !cloudError) {
     return (
       <div className="flex flex-col h-screen w-full bg-[#f6ebda] items-center justify-center text-center font-sans">
@@ -288,7 +334,6 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-[#f6ebda] font-sans relative overflow-hidden">
-      {/* GLOBAL TOAST */}
       {toast && (
         <div className="absolute top-20 md:top-6 left-1/2 transform -translate-x-1/2 w-[90%] md:w-auto md:min-w-[300px] bg-gray-800 text-white px-6 py-4 rounded-xl shadow-2xl z-50 text-sm text-center font-medium animate-in fade-in slide-in-from-top-4 flex items-center justify-center space-x-3">
           <CheckCircle size={20} className="text-green-400 shrink-0" />
@@ -296,7 +341,6 @@ export default function App() {
         </div>
       )}
 
-      {/* HEADER TOP BAR */}
       <header className="bg-[#003040] text-white px-4 md:px-8 py-4 shadow-md z-20 w-full flex justify-between items-center">
         <div>
           <h1 className="text-xl md:text-2xl font-bold tracking-wide">Onomo Feedback Tracker</h1>
@@ -315,10 +359,7 @@ export default function App() {
         </div>
       )}
 
-      {/* DESKTOP/MOBILE SPLIT LAYOUT */}
       <div className="flex flex-1 overflow-hidden w-full relative">
-        
-        {/* DESKTOP SIDEBAR NAVIGATION */}
         <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 z-10 shadow-[2px_0_10px_rgba(0,0,0,0.02)] flex-shrink-0 relative">
           <nav className="flex-1 px-4 py-8 space-y-3">
             {['dashboard', 'add', 'history'].map((tab) => (
@@ -336,15 +377,13 @@ export default function App() {
           </div>
         </aside>
 
-        {/* MAIN SCROLLABLE CONTENT */}
         <main className="flex-1 overflow-y-auto pb-24 md:pb-8 relative w-full">
-          {activeTab === 'dashboard' && <Dashboard entries={entries} currency={currency} exchangeRates={exchangeRates} onOpenTicketsClick={() => { setHistoryFilter('open'); setActiveTab('history'); }} onStatClick={(filter) => { setHistoryFilter(filter); setActiveTab('history'); }} />}
+          {activeTab === 'dashboard' && <Dashboard entries={entries} currency={currency} exchangeRates={exchangeRates} onOpenTicketsClick={() => { setHistoryFilter('open'); setActiveTab('history'); }} onStatClick={(filter) => { setHistoryFilter(filter); setActiveTab('history'); }} onArchiveMonth={archiveResolvedTickets} />}
           {activeTab === 'add' && <AddEntryForm onSave={addEntry} currency={currency} exchangeRates={exchangeRates} />}
           {activeTab === 'history' && <History entries={entries} onResolve={resolveEntry} onAddComment={addComment} onMarkEmailSent={markEmailSent} currency={currency} exchangeRates={exchangeRates} filter={historyFilter} setFilter={setHistoryFilter} ticker={timeTicker} />}
         </main>
       </div>
 
-      {/* MOBILE BOTTOM NAVIGATION */}
       <nav className="md:hidden bg-white border-t border-gray-200 absolute bottom-0 w-full flex justify-around p-2 z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
         {['dashboard', 'add', 'history'].map((tab) => (
           <button key={tab} onClick={() => { setActiveTab(tab); if(tab==='history') setHistoryFilter('all'); }} className={`flex flex-col items-center p-2 rounded-lg w-1/3 transition-colors ${activeTab === tab ? 'text-[#f18a00] bg-[#f18a00]/10' : 'text-gray-500 hover:text-[#003040]'}`}>
@@ -354,9 +393,8 @@ export default function App() {
         ))}
       </nav>
       
-      {/* MOBILE DIAGNOSTICS */}
       <div className="md:hidden absolute bottom-[72px] left-0 w-full bg-slate-900 text-white/60 px-3 py-1 text-[8px] font-mono flex justify-between border-t border-white/10 z-20 pointer-events-none">
-        <span>Link Up: Validated</span>
+        <span>Production Status: Live</span>
         {lastSync && <span>Sync: {lastSync}</span>}
       </div>
     </div>
@@ -365,14 +403,23 @@ export default function App() {
 
 // --- COMPONENTS ---
 
-function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onStatClick }) {
-  const [range, setRange] = useState('30');
+function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onStatClick, onArchiveMonth }) {
+  const [range, setRange] = useState('month'); 
   
   const filtered = useMemo(() => {
-    if (range === 'all') return entries;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - parseInt(range));
-    return entries.filter(e => new Date(e.date) >= cutoff);
+    return entries.filter(e => {
+      const eDate = new Date(e.date);
+      if (range === 'all') return true;
+      if (range === 'month') {
+         const now = new Date();
+         return eDate.getMonth() === now.getMonth() && eDate.getFullYear() === now.getFullYear();
+      }
+      if (range === '1') return eDate.toDateString() === new Date().toDateString();
+      
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - parseInt(range));
+      return eDate >= cutoff;
+    });
   }, [entries, range]);
 
   const staffLeaderboard = useMemo(() => {
@@ -487,42 +534,39 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
   return (
     <div className="p-4 md:p-8 space-y-4 md:space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       
-      {/* CONTROLS ROW */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-3 md:space-y-0 bg-white p-3 md:p-4 rounded-xl border border-gray-200 shadow-sm">
         <div className="flex items-center space-x-3 w-full md:w-auto">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest hidden md:block">Filter:</span>
-          <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-gray-50 border border-gray-300 text-gray-800 text-sm rounded-lg focus:ring-[#003040] focus:border-[#003040] block p-2 font-medium w-full md:w-auto">
-            <option value="1">Today</option><option value="7">Last 7 Days</option><option value="30">Last 30 Days</option><option value="all">All Time</option>
+          <select value={range} onChange={(e) => setRange(e.target.value)} className="bg-gray-50 border border-gray-300 text-gray-800 text-sm rounded-lg focus:ring-[#003040] focus:border-[#003040] block p-2 pr-10 font-medium w-full md:w-auto appearance-none relative">
+            <option value="1">Today</option><option value="7">Last 7 Days</option><option value="month">This Month</option><option value="all">All Time</option>
           </select>
         </div>
         
-        <div className="flex space-x-2 w-full md:w-auto">
-          <button onClick={generateEODReport} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#cf6231] text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-[#cf6231]/90 transition-colors shadow-sm">
-            <Mail size={16} className="mr-2" /> EOD Report
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+          <button onClick={onArchiveMonth} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-gray-200 text-gray-700 px-3 py-2.5 rounded-lg font-semibold hover:bg-gray-300 transition-colors shadow-sm" title="Archive resolved tickets">
+            <Archive size={16} className="mr-1.5" /> Archive Month
           </button>
-          <button onClick={exportCSV} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#003040] text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-[#003040]/90 transition-colors shadow-sm">
-            <Download size={16} className="mr-2" /> Export CSV
+          <button onClick={generateEODReport} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#cf6231] text-white px-3 py-2.5 rounded-lg font-semibold hover:bg-[#cf6231]/90 transition-colors shadow-sm">
+            <Mail size={16} className="mr-1.5" /> EOD Report
+          </button>
+          <button onClick={exportCSV} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#003040] text-white px-3 py-2.5 rounded-lg font-semibold hover:bg-[#003040]/90 transition-colors shadow-sm">
+            <Download size={16} className="mr-1.5" /> Export CSV
           </button>
         </div>
       </div>
       
-      {/* 3-COLUMN METRICS */}
       <div className="grid grid-cols-3 gap-2 md:gap-6">
         <StatBox label="Praises" value={stats.comps} color="text-[#595733] bg-[#595733]/10 border-[#595733]/20 hover:bg-[#595733]/20 cursor-pointer transition-colors" onClick={() => onStatClick('compliment')} />
         <StatBox label="Complaints" value={stats.complaints} color="text-[#8e2a2a] bg-[#8e2a2a]/10 border-[#8e2a2a]/20 hover:bg-[#8e2a2a]/20 cursor-pointer transition-colors" onClick={() => onStatClick('complaint')} />
         <StatBox label="Incidents" value={stats.incidents} color="text-[#003040] bg-[#a0c8d2]/30 border-[#a0c8d2]/40 hover:bg-[#a0c8d2]/50 cursor-pointer transition-colors" onClick={() => onStatClick('incident')} />
       </div>
       
-      {/* 2-COLUMN BOTTOM METRICS */}
       <div className="grid grid-cols-2 gap-4 md:gap-6">
         <MetricCard label="Tickets Open" value={stats.open} color="bg-white border-red-200 text-[#8e2a2a]" onClick={onOpenTicketsClick} icon={<AlertCircle size={18} className="text-[#8e2a2a]" />} />
         <MetricCard label="Total Resolution Cost" value={`${currency}${stats.cost.toFixed(2)}`} color="bg-white border-gray-200 text-[#003040]" icon={<Coins size={18} className="text-[#a0c8d2]" />} />
       </div>
 
-      {/* SIDE-BY-SIDE ON DESKTOP */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        
-        {/* LEADERBOARD */}
         <div className="flex flex-col">
           <h2 className="text-lg md:text-xl font-bold text-[#003040] mb-3 flex items-center">
             <Trophy size={20} className="mr-2 text-[#ffb131]" /> Staff Performance Board
@@ -553,15 +597,13 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
           </div>
         </div>
 
-        {/* 7-DAY TREND */}
         <div className="flex flex-col">
           <h2 className="text-lg md:text-xl font-bold text-[#003040] mb-3 flex items-center">
             <Activity size={20} className="mr-2 text-[#a0c8d2]" /> 7-Day Issue Trend
           </h2>
           <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 flex-1 flex flex-col justify-end min-h-[220px] shadow-sm">
             <div className="flex items-end justify-between space-x-1 md:space-x-2 h-40 relative">
-              {/* Legend overlay */}
-              <div className="absolute top-0 right-0 flex flex-col items-end space-y-1 opacity-60">
+              <div className="absolute top-0 right-0 flex flex-col items-end space-y-1 opacity-60 z-10 bg-white/50 p-1">
                  <span className="text-[10px] font-bold text-[#595733] flex items-center"><span className="w-2 h-2 bg-[#595733] mr-1 rounded-sm"></span> Praises</span>
                  <span className="text-[10px] font-bold text-[#8e2a2a] flex items-center"><span className="w-2 h-2 bg-[#8e2a2a] mr-1 rounded-sm"></span> Issues</span>
               </div>
@@ -586,17 +628,17 @@ function Dashboard({ entries, currency, exchangeRates, onOpenTicketsClick, onSta
 
 function StatBox({ label, value, color, onClick }) {
   return (
-    <div onClick={onClick} className={`${color} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center ${onClick ? 'active:scale-95' : ''}`}>
-      <span className="text-3xl md:text-4xl font-bold leading-none mb-1 md:mb-2">{value}</span>
-      <span className="text-xs md:text-sm font-semibold text-center opacity-80 uppercase tracking-widest">{label}</span>
+    <div onClick={onClick} className={`${color} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center min-h-[100px] ${onClick ? 'active:scale-95' : ''}`}>
+      <span className="text-3xl md:text-4xl font-bold leading-none mb-2">{value}</span>
+      <span className="text-xs md:text-sm font-semibold text-center opacity-80 uppercase tracking-widest break-words">{label}</span>
     </div>
   );
 }
 
 function MetricCard({ label, value, color, onClick, icon }) {
   return (
-    <div onClick={onClick} className={`${color} p-4 md:p-6 rounded-2xl border shadow-sm transition-all active:scale-[0.98] ${onClick ? 'cursor-pointer hover:shadow-md hover:border-gray-300' : ''} flex flex-col justify-between`}>
-      <div className="flex items-center space-x-2 mb-2">
+    <div onClick={onClick} className={`${color} p-4 md:p-6 rounded-2xl border shadow-sm transition-all min-h-[100px] active:scale-[0.98] ${onClick ? 'cursor-pointer hover:shadow-md hover:border-gray-300' : ''} flex flex-col justify-between`}>
+      <div className="flex flex-col md:flex-row md:items-center items-start md:space-x-2 space-y-1 md:space-y-0 mb-3">
         {icon}
         <span className="text-xs md:text-sm font-bold opacity-70 uppercase tracking-widest">{label}</span>
       </div>
@@ -609,9 +651,17 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
   const [type, setType] = useState('complaint');
   const [form, setForm] = useState({ 
     guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', 
-    handledBy: '', actionTaken: ACTION_OPTIONS[0], cost: '', status: 'resolved',
+    handledBy: '', actionTaken: COMPLAINT_ACTIONS[0], cost: '', status: 'resolved',
     followUpEmail: '', followUpPhone: '', guestEmailSent: false, managerEmailSent: false, escalationSent: false, staffMentioned: ''
   });
+
+  const activeActionOptions = type === 'compliment' ? COMPLIMENT_ACTIONS : COMPLAINT_ACTIONS;
+
+  useEffect(() => {
+    if (!activeActionOptions.includes(form.actionTaken)) {
+      setForm(prev => ({ ...prev, actionTaken: activeActionOptions[0] }));
+    }
+  }, [type, activeActionOptions, form.actionTaken]);
 
   const inferredSeverity = useMemo(() => {
     return (type === 'complaint' || type === 'incident') ? determineSOPSeverity(form.reason) : 'quick';
@@ -630,6 +680,7 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
       sentiment: analyzeSentiment(form.reason), 
       cost: normalizedCostInUSD,
       severity: inferredSeverity, 
+      isArchived: false,
       comments: [] 
     };
 
@@ -648,7 +699,7 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
     
     setForm({ 
       guestName: '', guestEmail: '', guestPhone: '', department: DEPARTMENTS[0], reason: '', 
-      handledBy: '', actionTaken: ACTION_OPTIONS[0], cost: '', status: 'resolved',
+      handledBy: '', actionTaken: activeActionOptions[0], cost: '', status: 'resolved',
       followUpEmail: '', followUpPhone: '', guestEmailSent: false, managerEmailSent: false, escalationSent: false, staffMentioned: ''
     });
   };
@@ -656,7 +707,6 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
   return (
     <form onSubmit={submit} className="p-4 md:p-8 space-y-4 md:space-y-6 font-sans max-w-4xl mx-auto animate-in fade-in duration-500">
       
-      {/* TOP TAB TOGGLES */}
       <div className="flex bg-white border border-gray-200 rounded-xl p-1.5 shadow-sm">
         <button type="button" onClick={() => setType('compliment')} className={`flex-1 py-2.5 md:py-3 text-xs md:text-sm font-bold rounded-lg transition-all ${type === 'compliment' ? 'bg-[#595733]/10 shadow-sm text-[#595733]' : 'text-gray-500 hover:bg-gray-50'}`}>Compliment</button>
         <button type="button" onClick={() => setType('complaint')} className={`flex-1 py-2.5 md:py-3 text-xs md:text-sm font-bold rounded-lg transition-all ${type === 'complaint' ? 'bg-[#8e2a2a]/10 shadow-sm text-[#8e2a2a]' : 'text-gray-500 hover:bg-gray-50'}`}>Complaint</button>
@@ -677,14 +727,14 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Guest Email</label>
             <div className="relative">
                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-               <input type="email" value={form.guestEmail} onChange={e=>setForm({...form, guestEmail: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="guest@email.com" />
+               <input type="email" value={form.guestEmail} onChange={e=>setForm({...form, guestEmail: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="guest@email.com" />
             </div>
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Guest Phone</label>
             <div className="relative">
                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-               <input type="tel" value={form.guestPhone} onChange={e=>setForm({...form, guestPhone: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="+1 234..." />
+               <input type="tel" value={form.guestPhone} onChange={e=>setForm({...form, guestPhone: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#003040] transition-shadow" placeholder="+1 234..." />
             </div>
           </div>
         </div>
@@ -699,7 +749,7 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
           <div className="md:col-span-2">
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Department Mentioned</label>
             <div className="relative">
-              <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
+              <select value={form.department} onChange={e=>setForm({...form, department: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pr-10 md:pr-12 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
                 {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
@@ -712,7 +762,6 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
           </div>
         </div>
         
-        {/* DESKTOP OPTIMIZED AI CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-[#a0c8d2]/10 p-4 rounded-xl border border-[#a0c8d2]/30 flex flex-col space-y-2">
               <div className="flex items-center space-x-2 pb-2 border-b border-black/5">
@@ -743,7 +792,7 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Staff Member Mentioned (Optional)</label>
              <div className="relative">
                 <Award className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#cf6231]" size={18} />
-                <input value={form.staffMentioned} onChange={e=>setForm({...form, staffMentioned: e.target.value})} className="w-full border border-[#cf6231]/30 bg-[#cf6231]/5 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#cf6231] text-[#cf6231] font-bold" placeholder="Who did the guest praise?" />
+                <input value={form.staffMentioned} onChange={e=>setForm({...form, staffMentioned: e.target.value})} className="w-full border border-[#cf6231]/30 bg-[#cf6231]/5 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#cf6231] text-[#cf6231] font-bold" placeholder="Who did the guest praise?" />
              </div>
            </div>
         )}
@@ -751,8 +800,8 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">Action Taken / Standard Resolution</label>
           <div className="relative">
-            <select value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
-              {ACTION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            <select value={form.actionTaken} onChange={e=>setForm({...form, actionTaken: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pr-10 md:pr-12 text-sm outline-none bg-white focus:ring-2 focus:ring-[#003040] cursor-pointer appearance-none">
+              {activeActionOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
           </div>
@@ -767,15 +816,18 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">Status</label>
-              <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 text-sm outline-none focus:ring-2 focus:ring-[#003040] bg-white font-bold text-[#8e2a2a] cursor-pointer">
-                <option value="open">Requires Further Action (Open)</option><option value="resolved" className="text-green-700">Resolved & Closed</option>
-              </select>
+              <div className="relative">
+                <select value={form.status} onChange={e=>setForm({...form, status: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pr-10 md:pr-12 text-sm outline-none focus:ring-2 focus:ring-[#003040] bg-white font-bold text-[#8e2a2a] cursor-pointer appearance-none">
+                  <option value="open">Requires Further Action (Open)</option><option value="resolved" className="text-green-700">Resolved & Closed</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Total Cost Impact</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5">Cost / Damage</label>
               <div className="relative w-full">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold"><Coins size={18} /></span>
-                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-300 rounded-xl p-3 md:p-4 pl-12 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
+                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="bg-white border border-gray-300 rounded-xl p-3 md:p-4 pl-12 md:pl-14 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
               </div>
             </div>
           </div>
@@ -786,14 +838,14 @@ function AddEntryForm({ onSave, currency, exchangeRates }) {
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">{inferredSeverity === 'critical' ? 'GM Email Target' : 'Supervisor / HOD Email Target'}</label>
                 <div className="relative">
                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                   <input type="email" value={form.followUpEmail} onChange={e=>setForm({...form, followUpEmail: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="manager@hotel.com" />
+                   <input type="email" value={form.followUpEmail} onChange={e=>setForm({...form, followUpEmail: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="manager@hotel.com" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">{inferredSeverity === 'critical' ? 'GM WhatsApp Number Target' : 'Handler WhatsApp Number'}</label>
                 <div className="relative">
                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                   <input type="tel" value={form.followUpPhone} onChange={e=>setForm({...form, followUpPhone: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-xl p-3 md:p-4 pl-10 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="+27 82 123 4567" />
+                   <input type="tel" value={form.followUpPhone} onChange={e=>setForm({...form, followUpPhone: e.target.value})} className="w-full bg-[#f6ebda]/50 border border-gray-200 rounded-xl p-3 md:p-4 pl-10 md:pl-12 text-sm outline-none focus:ring-2 focus:ring-[#003040]" placeholder="+27 82 123 4567" />
                 </div>
               </div>
             </div>
@@ -818,6 +870,9 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
   const [commentInput, setCommentInput] = useState({});
   
   const filtered = entries.filter(e => {
+    if (filter === 'archived') return e.isArchived;
+    if (e.isArchived) return false;
+
     if (filter === 'all') return true;
     if (filter === 'open') return e.status === 'open';
     if (filter === 'resolved') return e.status === 'resolved';
@@ -835,7 +890,6 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     const msElapsed = Date.now() - new Date(entry.date).getTime();
     const minutesElapsed = msElapsed / 60000;
     
-    // UPDATED SLA TIMER TO 15 MINUTE BENCHMARK FOR RAPID RESPONSE
     return {
       isBreached: minutesElapsed >= 15, 
       hours: Math.floor(minutesElapsed / 60),
@@ -855,14 +909,27 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
       sub = `🚨 [SLA BREACH ALERT] ${entry.department} Ticket Overdue`;
       body = `WARNING: The following ticket has breached its 15-minute resolution window.\n\nOverdue by: ${sla.hours}h ${sla.minutes}m\nRoom/Guest: ${entry.guestName}\nIssue: ${entry.reason}\nLogged By: ${entry.handledBy}`;
     } else {
-      // ONOMO BRAND VOICE EMAIL TONES
+      
+      // DYNAMIC IN-HOUSE CONTEXTUAL GUEST EMAIL ENGINE
       to = entry.guestEmail || "";
+      
+      // Clean up the text input so it flows smoothly in the middle of a sentence
+      const lowerReason = entry.reason ? entry.reason.charAt(0).toLowerCase() + entry.reason.slice(1) : "this matter";
+      const lowerAction = entry.actionTaken ? entry.actionTaken.charAt(0).toLowerCase() + entry.actionTaken.slice(1) : "addressed the situation";
+
       if (entry.type === 'compliment') {
         sub = `Thank you for experiencing ONOMO Hospitality!`;
-        body = `Dear ${entry.guestName},\n\nWarm greetings from the ONOMO Sandton family!\n\nThank you so much for your wonderful feedback regarding the ${entry.department}. It brings us immense joy to know that our team could make your stay memorable. African hospitality is at the heart of everything we do, and your kind words inspire us to keep delivering exceptional experiences.\n\nWe cannot wait to welcome you back to our vibrant hotel soon.\n\nWarmest regards,\nONOMO Hotel Sandton Management`;
+        const staffShoutout = entry.staffMentioned ? ` I will personally ensure that ${entry.staffMentioned} is recognized for their fantastic service and true O-Smile.` : '';
+        
+        body = `Dear ${entry.guestName},\n\nWarm greetings from the ONOMO Sandton family!\n\nThank you so much for sharing your wonderful feedback regarding our ${entry.department}. It brings us immense joy to hear that ${lowerReason}.${staffShoutout}\n\nSince you are still in-house with us, we wanted to reach out immediately to celebrate this with you. African hospitality is at the heart of everything we do, and ensuring you feel at home is our greatest reward.\n\nPlease let us know if there is anything else we can do to make the rest of your stay even more special.\n\nWarmest regards,\nONOMO Hotel Sandton Management`;
+        
+      } else if (entry.type === 'incident') {
+        sub = `Checking in on your experience at ONOMO Sandton`;
+        body = `Dear ${entry.guestName},\n\nWarm greetings from ONOMO Hotel Sandton.\n\nI am reaching out personally following the incident reported regarding ${lowerReason}. Please accept our sincere concern, as your safety and comfort are our absolute highest priorities.\n\nWe have immediately ${lowerAction} to ensure everything is resolved and secure.\n\nAs you are still our guest, we want to ensure you feel completely looked after. Please let us know if you require any further assistance or if there is anything we can do to make the remainder of your stay more comfortable.\n\nWith warm regards and care,\nONOMO Hotel Sandton Management`;
+        
       } else {
         sub = `Following up on your experience at ONOMO Sandton`;
-        body = `Dear ${entry.guestName},\n\nWarm greetings from ONOMO Hotel Sandton.\n\nI am writing to you personally regarding your recent experience with our ${entry.department}. Please accept our most sincere apologies for the issues you encountered. At ONOMO, we pride ourselves on delivering warm and flawless African hospitality, and it deeply saddens us when we fall short of that promise.\n\nWe have taken your feedback to heart and are actively addressing the matter with our team to ensure it does not happen again. Your comfort and peace of mind are our highest priorities.\n\nWe truly hope you will give us another opportunity to welcome you back and provide you with the flawless stay you deserve.\n\nWith sincere apologies and warm regards,\nONOMO Hotel Sandton Management`;
+        body = `Dear ${entry.guestName},\n\nWarm greetings from ONOMO Hotel Sandton.\n\nI am writing to you personally regarding your recent experience with our ${entry.department}. Please accept our most sincere apologies that ${lowerReason}. At ONOMO, we pride ourselves on delivering warm, flawless African hospitality, and it deeply saddens us when we fall short.\n\nTo ensure your comfort, we have immediately ${lowerAction}. We hope this helps to bring the ONOMO smile back to your stay.\n\nSince you are still with us, your peace of mind is our highest priority. I would love to ensure the rest of your time here is completely flawless. Please let us know if you need any further assistance.\n\nWith sincere apologies and warm regards,\nONOMO Hotel Sandton Management`;
       }
     }
     window.location.href = `mailto:${to}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
@@ -891,20 +958,20 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
   return (
     <div className="p-4 md:p-8 space-y-4 md:space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       
-      {/* DESKTOP CENTRIC FILTER BAR */}
       <div className="flex flex-wrap bg-white rounded-xl p-2 md:p-3 shadow-sm border border-gray-200 gap-2 w-full">
-        {['all', 'open', 'resolved', 'complaint', 'incident', 'compliment'].map(f => (
-          <button key={f} onClick={() => setFilter(f)} className={`flex-1 min-w-[30%] md:min-w-[120px] py-2 md:py-2.5 text-xs md:text-sm font-bold rounded-lg capitalize transition-all ${filter === f ? 'bg-[#003040] shadow-md text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{f}</button>
+        {['all', 'open', 'resolved', 'complaint', 'incident', 'compliment', 'archived'].map(f => (
+          <button key={f} onClick={() => setFilter(f)} className={`flex-1 min-w-[30%] md:min-w-[100px] py-2 md:py-2.5 text-xs md:text-sm font-bold rounded-lg capitalize transition-all ${filter === f ? (f === 'archived' ? 'bg-gray-800 text-white' : 'bg-[#003040] shadow-md text-white') : 'text-gray-500 hover:bg-gray-100'}`}>
+            {f === 'archived' ? <span className="flex items-center justify-center"><Archive size={14} className="mr-1.5" /> Archive</span> : f}
+          </button>
         ))}
       </div>
 
       {entries.length === 0 || filtered.length === 0 ? (
          <div className="p-12 md:p-24 bg-white rounded-2xl border border-gray-200 text-center text-gray-400 flex flex-col items-center h-full justify-center shadow-sm">
-            <List size={64} className="mb-4 text-gray-200" />
+            {filter === 'archived' ? <Archive size={64} className="mb-4 text-gray-200" /> : <List size={64} className="mb-4 text-gray-200" />}
             <p className="text-lg font-medium">No records found for this filter.</p>
          </div>
       ) : (
-        /* MASONRY GRID LAYOUT FOR DESKTOP - UNCLAMPED TEXT FOR FULL READABILITY */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {filtered.map(entry => {
             const localDisplayCost = (Number(entry.cost) || 0) * displayConversionFactor;
@@ -928,12 +995,17 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
                 key={entry.id} 
                 className={`bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-l-8 transition-all duration-300 flex flex-col h-full ${
                   sla.isBreached ? 'border-[#8e2a2a] bg-[#8e2a2a]/5 hover:shadow-md' : 'border-gray-200 hover:shadow-md'
-                }`} 
+                } ${entry.isArchived ? 'opacity-80 grayscale-[30%]' : ''}`} 
                 style={{ borderLeftColor: leftBorderColor }}
               >
-                {/* HEADER INFO */}
                 <div>
-                  {sla.isBreached && (
+                  {entry.isArchived && (
+                     <div className="mb-4 -mx-5 md:-mx-6 -mt-5 md:-mt-6 bg-gray-800 text-white font-bold uppercase text-[10px] md:text-xs tracking-wider p-2.5 flex items-center justify-center space-x-2 rounded-t-xl shadow-sm">
+                       <Archive size={14} /><span>Archived Record</span>
+                     </div>
+                  )}
+
+                  {sla.isBreached && !entry.isArchived && (
                     <div className="mb-4 -mx-5 md:-mx-6 -mt-5 md:-mt-6 bg-[#8e2a2a] text-white font-bold uppercase text-[10px] md:text-xs tracking-wider p-2.5 flex items-center justify-center space-x-2 animate-pulse rounded-t-xl shadow-sm">
                       <Clock size={14} />
                       <span>⚠️ SLA BREACHED: Overdue {sla.hours}h {sla.minutes}m</span>
@@ -975,28 +1047,25 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
                   </div>
                 </div>
 
-                {/* BOTTOM HALF PINNED */}
                 <div className="mt-auto pt-5 border-t border-gray-100 space-y-4">
-                  {/* Team Notes Section */}
                   <div className="bg-[#f6ebda]/30 rounded-xl p-3 border border-[#a0c8d2]/30">
                     <h4 className="text-xs font-bold text-[#003040] mb-2 flex items-center"><MessageSquare size={14} className="mr-1.5" /> Internal Notes</h4>
-                    <div className="space-y-2 mb-3 max-h-32 overflow-y-auto pr-1">
+                    <div className="space-y-2 mb-3 max-h-24 overflow-y-auto pr-1">
                       {entry.comments?.map((c, i) => (
                         <div key={i} className="bg-white p-2 rounded-lg border border-gray-200 text-xs shadow-sm">
                           <span className="font-bold text-[#cf6231]">{c.author}:</span> <span className="text-gray-700 break-words whitespace-pre-wrap">{c.text}</span>
                         </div>
                       ))}
                     </div>
-                    <div className="flex space-x-2">
-                      <input value={commentInput[entry.id]?.author || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], author: e.target.value}})} placeholder="Name" className="w-1/3 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
-                      <input value={commentInput[entry.id]?.text || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text: e.target.value}})} placeholder="Note..." className="flex-1 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
-                      <button onClick={()=>{ if(!commentInput[entry.id]?.text) return; onAddComment(entry.id, commentInput[entry.id].text, commentInput[entry.id].author || "Staff"); setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text:''}}); }} className="bg-[#003040] hover:bg-[#003040]/90 transition-colors text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm active:scale-95">Post</button>
+                    <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2">
+                      <input value={commentInput[entry.id]?.author || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], author: e.target.value}})} placeholder="Name" className="w-full md:w-1/3 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
+                      <input value={commentInput[entry.id]?.text || ''} onChange={e=>setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text: e.target.value}})} placeholder="Note..." className="w-full md:flex-1 bg-white border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-1 focus:ring-[#003040]" />
+                      <button onClick={()=>{ if(!commentInput[entry.id]?.text) return; onAddComment(entry.id, commentInput[entry.id].text, commentInput[entry.id].author || "Staff"); setCommentInput({...commentInput, [entry.id]: {...commentInput[entry.id], text:''}}); }} className="w-full md:w-auto bg-[#003040] hover:bg-[#003040]/90 transition-colors text-white px-3 py-2 rounded-lg font-bold text-xs shadow-sm active:scale-95">Post</button>
                     </div>
                   </div>
                   
-                  {/* Action Buttons */}
                   <div className="flex flex-col space-y-2.5">
-                    {sla.isBreached && (
+                    {sla.isBreached && !entry.isArchived && (
                       <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
                         <p className="text-[10px] font-bold text-[#8e2a2a] uppercase tracking-widest text-center">Urgent Escalation</p>
                         <div className="grid grid-cols-2 gap-2">
@@ -1012,13 +1081,13 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
                       </div>
                     )}
 
-                    {entry.guestEmail && (
+                    {!entry.isArchived && entry.guestEmail && (
                       <button onClick={() => handleSendEmail(entry, 'guest')} className={`w-full font-bold py-2.5 rounded-xl border transition-all text-xs md:text-sm flex items-center justify-center shadow-sm active:scale-[0.98] ${entry.guestEmailSent ? 'bg-[#595733]/10 border-[#595733]/30 text-[#595733]' : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'}`}>
                         {entry.guestEmailSent ? <CheckCircle size={16} className="mr-2" /> : <Mail size={16} className="mr-2 text-gray-400" />} {entry.guestEmailSent ? 'GUEST NOTIFIED' : 'Email Guest'}
                       </button>
                     )}
                     
-                    {entry.status === 'open' && (
+                    {entry.status === 'open' && !entry.isArchived && (
                       <>
                         {entry.followUpEmail && !sla.isBreached && (
                           <button onClick={() => handleSendEmail(entry, 'manager')} className={`w-full py-2.5 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center shadow-sm transition-all active:scale-[0.98] ${entry.managerEmailSent ? 'bg-green-600 text-white' : 'bg-[#003040] text-white hover:bg-[#003040]/90'}`}>
@@ -1046,3 +1115,5 @@ function History({ entries, onResolve, onAddComment, onMarkEmailSent, currency, 
     </div>
   );
 }
+
+```
