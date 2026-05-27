@@ -144,11 +144,12 @@ export default function App() {
 }
 
 // ==========================================
-// RECOGNITION APP
+// RECOGNITION APP (UNIFIED LEADERBOARD)
 // ==========================================
 function RecognitionApp({ onBackToPortal }) {
   const [activeTab, setActiveTab] = useState('give');
-  const [entries, setEntries] = useState([]);
+  const [cheerEntries, setCheerEntries] = useState([]);
+  const [feedbackEntries, setFeedbackEntries] = useState([]); // Needed to pull guest compliments
   const [user, setUser] = useState(null);
   const [toast, setToast] = useState(null);
   const [form, setForm] = useState({ recipient: '', coreValue: CORE_VALUES[0], message: '', sender: '' });
@@ -156,13 +157,22 @@ function RecognitionApp({ onBackToPortal }) {
   const showToast = (message) => { setToast(message); setTimeout(() => setToast(null), 4000); };
 
   useEffect(() => { onAuthStateChanged(auth, setUser); }, []);
+  
   useEffect(() => {
     if (!user) return;
-    const entriesRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'recognition_entries');
-    const unsubscribe = onSnapshot(entriesRef, (snapshot) => {
-      setEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    // Fetch Internal Cheers
+    const cheersRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'recognition_entries');
+    const unsubCheers = onSnapshot(cheersRef, (snapshot) => {
+      setCheerEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-    return () => unsubscribe();
+
+    // Fetch Guest Feedbacks (to merge praises)
+    const feedbackRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries');
+    const unsubFeedback = onSnapshot(feedbackRef, (snapshot) => {
+      setFeedbackEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => { unsubCheers(); unsubFeedback(); };
   }, [user]);
 
   const submitCheer = async (e) => {
@@ -177,18 +187,31 @@ function RecognitionApp({ onBackToPortal }) {
     } catch (error) { showToast(`Error: ${error.message}`); }
   };
 
+  // UNIFIED LEADERBOARD: Merges internal cheers + guest praises
   const leaderboard = useMemo(() => {
     const listMap = {};
     const now = new Date();
-    entries.forEach(e => {
+    
+    // Add Internal Cheers
+    cheerEntries.forEach(e => {
       const eDate = new Date(e.date);
       if (eDate.getMonth() === now.getMonth() && eDate.getFullYear() === now.getFullYear()) {
         const name = e.recipient.trim();
         if (name) listMap[name] = (listMap[name] || 0) + 1;
       }
     });
+
+    // Add External Guest Praises
+    feedbackEntries.forEach(e => {
+      const eDate = new Date(e.date);
+      if (e.type === 'compliment' && e.staffMentioned && eDate.getMonth() === now.getMonth() && eDate.getFullYear() === now.getFullYear()) {
+        const name = e.staffMentioned.trim();
+        if (name) listMap[name] = (listMap[name] || 0) + 1;
+      }
+    });
+
     return Object.entries(listMap).map(([name, points]) => ({ name, points })).sort((a, b) => b.points - a.points);
-  }, [entries]);
+  }, [cheerEntries, feedbackEntries]);
 
   return (
     <div className="flex flex-col h-screen w-full bg-[#fffdf9] font-sans relative overflow-hidden">
@@ -230,11 +253,11 @@ function RecognitionApp({ onBackToPortal }) {
                   <Star size={120} className="absolute -top-10 -right-10 text-white/20 rotate-45" /><Trophy size={64} className="mx-auto mb-4 drop-shadow-md text-yellow-200" />
                   <h3 className="text-sm font-bold tracking-widest uppercase mb-1 opacity-90">Current Employee of the Month</h3>
                   <h2 className="text-5xl font-black mb-2">{leaderboard[0].name}</h2>
-                  <div className="inline-block bg-white/20 px-6 py-2 rounded-full font-bold text-lg backdrop-blur-sm">{leaderboard[0].points} Cheers Received</div>
+                  <div className="inline-block bg-white/20 px-6 py-2 rounded-full font-bold text-lg backdrop-blur-sm">{leaderboard[0].points} Recognition Points</div>
                 </div>
               )}
               <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xl space-y-4">
-                <h3 className="font-bold text-xl text-gray-800 border-b border-gray-100 pb-3 flex items-center"><Activity className="mr-2 text-[#cf6231]" size={20} /> This Month's Ranking</h3>
+                <h3 className="font-bold text-xl text-gray-800 border-b border-gray-100 pb-3 flex items-center"><Activity className="mr-2 text-[#cf6231]" size={20} /> Unified Ranking (Staff + Guests)</h3>
                 {leaderboard.map((member, i) => (
                   <div key={member.name} className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100/50">
                     <div className="flex items-center space-x-4"><span className={`text-2xl font-black w-8 text-center ${i===0?'text-[#f18a00]':i===1?'text-slate-400':i===2?'text-[#cf6231]':'text-gray-300'}`}>#{i+1}</span><span className="font-bold text-lg text-gray-800">{member.name}</span></div>
@@ -398,6 +421,38 @@ function FeedbackDashboard({ entries, currency, exchangeRates, onOpenTicketsClic
     return { comps, complaints, incidents, cost, open };
   }, [filtered, currency, exchangeRates]);
 
+  // RESTORED: Trend Graph Data
+  const trendData = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push({ date: d.toDateString(), label: d.toLocaleDateString('en-US', { weekday: 'short' }), complaints: 0, compliments: 0 });
+    }
+    filtered.forEach(e => {
+      const eDate = new Date(e.date).toDateString();
+      const dayMatch = days.find(d => d.date === eDate);
+      if (dayMatch) {
+        if (e.type === 'complaint' || e.type === 'incident') dayMatch.complaints++;
+        if (e.type === 'compliment') dayMatch.compliments++;
+      }
+    });
+    const maxVal = Math.max(...days.map(d => Math.max(d.complaints, d.compliments, 1)));
+    return { days, maxVal };
+  }, [filtered]);
+
+  // RESTORED: Staff Leaderboard (Guest Praises Only)
+  const staffLeaderboard = useMemo(() => {
+    const listMap = {};
+    filtered.forEach(e => {
+      if (e.type === 'compliment' && e.staffMentioned) {
+        const cleanedName = e.staffMentioned.trim();
+        if (cleanedName) listMap[cleanedName] = (listMap[cleanedName] || 0) + 1;
+      }
+    });
+    return Object.entries(listMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+  }, [filtered]);
+
   const exportCSV = () => {
     const headers = ['Type', 'Date', 'Guest/Location', 'Department', 'Severity', 'Reason', 'Action', 'Base Cost (USD)', 'Status', 'Handled By', 'Sentiment'];
     const rows = filtered.map(e => `"${e.type}","${new Date(e.date).toLocaleDateString()}","${e.guestName}","${e.department}","${e.severity || 'quick'}","${(e.reason||'').replace(/"/g, '""')}","${(e.actionTaken||'').replace(/"/g, '""')}","${e.cost || 0}","${e.status || 'resolved'}","${e.handledBy || ''}","${e.sentiment?.label||'N/A'}"`);
@@ -429,14 +484,72 @@ function FeedbackDashboard({ entries, currency, exchangeRates, onOpenTicketsClic
           <button onClick={exportCSV} className="flex-1 md:flex-none flex items-center justify-center text-xs md:text-sm bg-[#003040] text-white px-3 py-2.5 rounded-lg font-semibold hover:bg-[#003040]/90 shadow-sm"><Download size={16} className="mr-1.5" /> CSV</button>
         </div>
       </div>
+      
       <div className="grid grid-cols-3 gap-2 md:gap-6">
         <div onClick={()=>onStatClick('compliment')} className="bg-[#595733]/10 border-[#595733]/20 text-[#595733] p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center min-h-[100px] cursor-pointer hover:bg-[#595733]/20"><span className="text-3xl md:text-4xl font-bold mb-2">{stats.comps}</span><span className="text-xs md:text-sm font-semibold uppercase tracking-widest break-words">Praises</span></div>
         <div onClick={()=>onStatClick('complaint')} className="bg-[#8e2a2a]/10 border-[#8e2a2a]/20 text-[#8e2a2a] p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center min-h-[100px] cursor-pointer hover:bg-[#8e2a2a]/20"><span className="text-3xl md:text-4xl font-bold mb-2">{stats.complaints}</span><span className="text-xs md:text-sm font-semibold uppercase tracking-widest break-words">Complaints</span></div>
         <div onClick={()=>onStatClick('incident')} className="bg-[#a0c8d2]/30 border-[#a0c8d2]/40 text-[#003040] p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col items-center justify-center min-h-[100px] cursor-pointer hover:bg-[#a0c8d2]/50"><span className="text-3xl md:text-4xl font-bold mb-2">{stats.incidents}</span><span className="text-xs md:text-sm font-semibold uppercase tracking-widest break-words">Incidents</span></div>
       </div>
+      
       <div className="grid grid-cols-2 gap-4 md:gap-6">
         <div onClick={onOpenTicketsClick} className="bg-white border-red-200 text-[#8e2a2a] p-4 md:p-6 rounded-2xl border shadow-sm cursor-pointer hover:shadow-md flex flex-col justify-between"><div className="flex flex-col md:flex-row md:items-center items-start md:space-x-2 space-y-1 md:space-y-0 mb-3"><AlertCircle size={18}/><span className="text-xs md:text-sm font-bold opacity-70 uppercase tracking-widest">Tickets Open</span></div><span className="text-2xl md:text-3xl font-bold text-[#003040]">{stats.open}</span></div>
         <div className="bg-white border-gray-200 text-[#003040] p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col justify-between"><div className="flex flex-col md:flex-row md:items-center items-start md:space-x-2 space-y-1 md:space-y-0 mb-3"><Coins size={18} className="text-[#a0c8d2]"/><span className="text-xs md:text-sm font-bold opacity-70 uppercase tracking-widest">Resolution Cost</span></div><span className="text-2xl md:text-3xl font-bold">{currency}{stats.cost.toFixed(2)}</span></div>
+      </div>
+
+      {/* RESTORED: Leaderboard and Graph for Feedback Dashboard */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <div className="flex flex-col">
+          <h2 className="text-lg md:text-xl font-bold text-[#003040] mb-3 flex items-center">
+            <Trophy size={20} className="mr-2 text-[#ffb131]" /> Guest-Driven Staff Praise
+          </h2>
+          <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 space-y-4 shadow-sm flex-1">
+            {staffLeaderboard.map((member, index) => {
+              const medalColors = ["text-[#ffb131]", "text-slate-400", "text-[#cf6231]"];
+              return (
+                <div key={member.name} className="flex justify-between items-center text-sm md:text-base border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                  <div className="flex items-center space-x-3 md:space-x-4 truncate">
+                    <span className="w-6 md:w-8 text-center font-bold">
+                      {index < 3 ? <Medal size={22} className={medalColors[index]} /> : <span className="text-gray-400">{index + 1}</span>}
+                    </span>
+                    <span className="font-semibold text-gray-800 truncate">{member.name}</span>
+                  </div>
+                  <span className="bg-[#ffb131]/10 text-[#cf6231] font-bold text-xs md:text-sm px-3 md:px-4 py-1.5 rounded-full flex items-center">
+                    <ThumbsUp size={14} className="mr-1.5" /> {member.count}
+                  </span>
+                </div>
+              );
+            })}
+            {staffLeaderboard.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-gray-400 opacity-60">
+                 <Trophy size={48} className="mb-3" />
+                 <p className="italic text-sm">No guest mentions captured yet.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col">
+          <h2 className="text-lg md:text-xl font-bold text-[#003040] mb-3 flex items-center">
+            <Activity size={20} className="mr-2 text-[#a0c8d2]" /> 7-Day Feedback Trend
+          </h2>
+          <div className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 flex-1 flex flex-col justify-end min-h-[220px] shadow-sm">
+            <div className="flex items-end justify-between space-x-1 md:space-x-2 h-40 relative">
+              <div className="absolute top-0 right-0 flex flex-col items-end space-y-1 opacity-60 z-10 bg-white/50 p-1">
+                 <span className="text-[10px] font-bold text-[#595733] flex items-center"><span className="w-2 h-2 bg-[#595733] mr-1 rounded-sm"></span> Praises</span>
+                 <span className="text-[10px] font-bold text-[#8e2a2a] flex items-center"><span className="w-2 h-2 bg-[#8e2a2a] mr-1 rounded-sm"></span> Issues</span>
+              </div>
+              {trendData.days.map((day, i) => (
+                <div key={i} className="flex flex-col items-center flex-1 group h-full justify-end pb-6 relative">
+                  <div className="flex w-full justify-center items-end space-x-0.5 h-full">
+                    <div className="w-1/2 bg-[#595733] rounded-t-sm transition-all hover:opacity-80" style={{ height: `${(day.compliments / trendData.maxVal) * 100}%` }}></div>
+                    <div className="w-1/2 bg-[#8e2a2a] rounded-t-sm transition-all hover:opacity-80" style={{ height: `${(day.complaints / trendData.maxVal) * 100}%` }}></div>
+                  </div>
+                  <span className="text-[10px] md:text-xs text-gray-500 font-medium absolute bottom-0">{day.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
