@@ -157,19 +157,36 @@ const analyzeSentiment = (text) => {
 export default function App() {
   const [currentView, setCurrentView] = useState('portal'); // 'portal', 'feedback', 'recognition'
   const [globalUser, setGlobalUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  // Authenticate once at the portal level
+  // CORE FIX: Authenticate immediately at the root level so no app buffers
   useEffect(() => {
     const initAuth = async () => {
       try {
         await signInAnonymously(auth);
       } catch (error) {
         console.error("Auth Failed:", error);
+        setAuthLoading(false);
       }
     };
     initAuth();
-    return onAuthStateChanged(auth, setGlobalUser);
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setGlobalUser(user);
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
+
+  if (authLoading) {
+    return (
+      <div className="flex flex-col h-screen w-full bg-[#f6ebda] items-center justify-center text-center font-sans">
+        <Loader2 className="animate-spin text-[#003040] mb-4" size={48} />
+        <p className="text-[#003040] font-medium animate-pulse">Establishing Secure Connection...</p>
+      </div>
+    );
+  }
 
   if (currentView === 'feedback') {
     return <FeedbackApp user={globalUser} onBackToPortal={() => setCurrentView('portal')} />;
@@ -233,7 +250,7 @@ export default function App() {
 function RecognitionApp({ user, onBackToPortal }) {
   const [activeTab, setActiveTab] = useState('give'); // 'give', 'board'
   const [cheerEntries, setCheerEntries] = useState([]);
-  const [feedbackEntries, setFeedbackEntries] = useState([]); // Needed to pull guest compliments
+  const [feedbackEntries, setFeedbackEntries] = useState([]); 
   const [toast, setToast] = useState(null);
   
   const [form, setForm] = useState({
@@ -318,7 +335,7 @@ function RecognitionApp({ user, onBackToPortal }) {
   return (
     <div className="flex flex-col h-screen w-full bg-[#fffdf9] font-sans relative overflow-hidden">
       {toast && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-[#f18a00] text-white px-6 py-4 rounded-full shadow-2xl z-50 text-sm font-bold flex items-center space-x-2 animate-bounce">
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 w-[90%] md:w-auto bg-[#f18a00] text-white px-6 py-4 rounded-full shadow-2xl z-50 text-sm font-bold flex items-center justify-center space-x-2 animate-bounce">
           <Sparkles size={20} /><span>{toast}</span>
         </div>
       )}
@@ -429,7 +446,7 @@ function RecognitionApp({ user, onBackToPortal }) {
 }
 
 // ==========================================
-// 3. GUEST FEEDBACK APP (FULLY RESTORED)
+// 3. GUEST FEEDBACK APP 
 // ==========================================
 function FeedbackApp({ user, onBackToPortal }) {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -461,7 +478,10 @@ function FeedbackApp({ user, onBackToPortal }) {
   }, []);
 
   useEffect(() => {
-    if (!user) return; 
+    if (!user) {
+        setLoading(false);
+        return; 
+    }
 
     const entriesRef = collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'feedback_entries');
     
@@ -484,7 +504,7 @@ function FeedbackApp({ user, onBackToPortal }) {
   }, [user]);
 
   const addEntry = async (newEntry, openWhatsAppTrigger) => {
-    if (!user) return showToast('Error: Connection pending...');
+    if (!user) return showToast('Error: Authentication required to save.');
     
     if (openWhatsAppTrigger) {
       openWhatsAppTrigger();
@@ -824,7 +844,6 @@ function FeedbackDashboard({ entries, currency, exchangeRates, onOpenTicketsClic
         </div>
       </div>
 
-      {/* FULLY RESTORED: Leaderboard and Graph for Feedback Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <div className="flex flex-col">
           <h2 className="text-lg md:text-xl font-bold text-[#003040] mb-3 flex items-center">
@@ -1018,7 +1037,7 @@ function FeedbackAddForm({ onSave, currency, exchangeRates }) {
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">Cost</label>
               <div className="relative w-full">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold"><Coins size={18} /></span>
-                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-12 md:pl-14 text-sm font-bold text-[#8e2a2a] outline-none focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
+                <input type="number" step="any" value={form.cost} onChange={e=>setForm({...form, cost: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 md:p-4 pl-12 md:pl-14 text-sm font-bold text-[#8e2a2a] outline-none w-full focus:ring-2 focus:ring-[#003040]" placeholder="0.00" />
               </div>
             </div>
           </div>
@@ -1047,7 +1066,7 @@ function FeedbackAddForm({ onSave, currency, exchangeRates }) {
       <div className="flex flex-col md:flex-row items-center gap-4 pt-4">
          <div className="w-full md:w-1/3 bg-[#a0c8d2]/10 p-3 md:p-4 rounded-xl border border-[#a0c8d2]/30 shadow-sm">
             <label className="block text-xs font-bold text-[#003040] mb-1.5 uppercase tracking-wider">Logged By Profile</label>
-            <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full border border-[#a0c8d2] rounded-lg p-2.5 text-sm font-bold text-[#003040] outline-none focus:ring-2 focus:ring-[#003040] bg-white text-center" placeholder="Your Name" />
+            <input required value={form.handledBy} onChange={e=>setForm({...form, handledBy: e.target.value})} className="w-full border border-[#a0c8d2] rounded-lg p-2.5 text-sm font-bold text-[#003040] outline-none focus:ring-2 focus:ring-[#003040] bg-white text-center" placeholder="Your Full Name" />
          </div>
          <button type="submit" className="w-full md:w-2/3 bg-[#003040] text-white font-bold py-4 md:py-6 rounded-xl text-lg hover:bg-[#003040]/90 transition-all shadow-lg active:scale-[0.98] flex items-center justify-center">
             <Database size={24} className="mr-3 text-[#a0c8d2]" /> Push to Cloud Securely
@@ -1085,8 +1104,8 @@ function FeedbackHistory({ entries, onResolve, onAddComment, onMarkEmailSent, cu
     let to = "", sub = "", body = "";
     if (emailType === 'manager') {
       to = entry.followUpEmail || "";
-      sub = entry.severity === 'critical' ? `🚨 [CRITICAL]: ${entry.department}` : `[HOD NOTICE]: ${entry.department}`;
-      body = `SOP LEVEL: ${SOP_FRAMEWORK[entry.severity || 'quick'].label}\nTYPE: ${entry.type.toUpperCase()}\nGUEST/ROOM: ${entry.guestName}\nREASON: ${entry.reason}\nLOGGED BY: ${entry.handledBy}`;
+      sub = entry.severity === 'critical' ? `🚨 [CRITICAL GM ESCALATION]: ${entry.department}` : `[HOD NOTICE] OPEN TICKET: ${entry.department}`;
+      body = `SOP LEVEL: ${SOP_FRAMEWORK[entry.severity || 'quick'].label}\n\nTYPE: ${entry.type.toUpperCase()}\nGUEST/ROOM: ${entry.guestName}\nREASON: ${entry.reason}\nLOGGED BY: ${entry.handledBy}`;
     } else if (emailType === 'escalation') {
       const sla = getSLADetails(entry);
       to = entry.followUpEmail || "";
@@ -1096,12 +1115,17 @@ function FeedbackHistory({ entries, onResolve, onAddComment, onMarkEmailSent, cu
       to = entry.guestEmail || "";
       const lowerReason = entry.reason ? entry.reason.charAt(0).toLowerCase() + entry.reason.slice(1) : "this matter";
       const lowerAction = entry.actionTaken ? entry.actionTaken.charAt(0).toLowerCase() + entry.actionTaken.slice(1) : "addressed the situation";
+
       if (entry.type === 'compliment') {
         sub = `Thank you for experiencing ONOMO Hospitality!`;
-        body = `Dear ${entry.guestName},\n\nThank you for sharing your feedback regarding our ${entry.department}. It brings us immense joy to hear that ${lowerReason}.\n\nWarmest regards,\nONOMO Hotel Sandton`;
+        const staffShoutout = entry.staffMentioned ? ` I will personally ensure that ${entry.staffMentioned} is recognized for their fantastic service and true O-Smile.` : '';
+        body = `Dear ${entry.guestName},\n\nWarm greetings from the ONOMO Sandton family!\n\nThank you so much for sharing your wonderful feedback regarding our ${entry.department}. It brings us immense joy to hear that ${lowerReason}.${staffShoutout}\n\nSince you are still in-house with us, we wanted to reach out immediately to celebrate this with you. African hospitality is at the heart of everything we do, and ensuring you feel at home is our greatest reward.\n\nPlease let us know if there is anything else we can do to make the rest of your stay even more special.\n\nWarmest regards,\nONOMO Hotel Sandton Management`;
+      } else if (entry.type === 'incident') {
+        sub = `Checking in on your experience at ONOMO Sandton`;
+        body = `Dear ${entry.guestName},\n\nWarm greetings from ONOMO Hotel Sandton.\n\nI am reaching out personally following the incident reported regarding ${lowerReason}. Please accept our sincere concern, as your safety and comfort are our absolute highest priorities.\n\nWe have immediately ${lowerAction} to ensure everything is resolved and secure.\n\nAs you are still our guest, we want to ensure you feel completely looked after. Please let us know if you require any further assistance or if there is anything we can do to make the remainder of your stay more comfortable.\n\nWith warm regards and care,\nONOMO Hotel Sandton Management`;
       } else {
         sub = `Following up on your experience at ONOMO Sandton`;
-        body = `Dear ${entry.guestName},\n\nI am writing to you personally regarding your experience with our ${entry.department}. Please accept our sincere apologies that ${lowerReason}.\n\nTo ensure your comfort, we have immediately ${lowerAction}. Please let us know if you need any further assistance.\n\nWarm regards,\nONOMO Hotel Sandton`;
+        body = `Dear ${entry.guestName},\n\nWarm greetings from ONOMO Hotel Sandton.\n\nI am writing to you personally regarding your recent experience with our ${entry.department}. Please accept our most sincere apologies that ${lowerReason}. At ONOMO, we pride ourselves on delivering warm, flawless African hospitality, and it deeply saddens us when we fall short.\n\nTo ensure your comfort, we have immediately ${lowerAction}. We hope this helps to bring the ONOMO smile back to your stay.\n\nSince you are still with us, your peace of mind is our highest priority. I would love to ensure the rest of your time here is completely flawless. Please let us know if you need any further assistance.\n\nWith sincere apologies and warm regards,\nONOMO Hotel Sandton Management`;
       }
     }
     window.location.href = `mailto:${to}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
@@ -1172,7 +1196,7 @@ function FeedbackHistory({ entries, onResolve, onAddComment, onMarkEmailSent, cu
                     </div>
                   </div>
                   
-                  <h3 className="font-bold text-gray-900 text-lg md:text-xl break-words">{entry.guestName}</h3>
+                  <h3 className="font-bold text-gray-900 text-lg md:text-xl break-words mt-2">{entry.guestName}</h3>
                   <p className="text-sm md:text-base font-semibold text-gray-600 mt-1 whitespace-pre-wrap break-words">{entry.reason}</p>
                   
                   <div className="grid grid-cols-2 gap-y-3 mt-4 text-xs md:text-sm text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100">
