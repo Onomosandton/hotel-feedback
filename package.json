@@ -8,13 +8,14 @@
     "build": "vite build",
     "preview": "vite preview"
   },
-  "@tailwindcss/postcss": "latest",: {
+  "dependencies": {
     "firebase": "^10.12.2",
-    "lucide-react": "^0.408.0",
+    "lucide-react": "latest",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
- "@tailwindcss/postcss": "latest",: {
+  "devDependencies": {
+    "@tailwindcss/postcss": "latest",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.14",
